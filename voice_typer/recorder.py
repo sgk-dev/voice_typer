@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import sounddevice as sd
+
+_logger = logging.getLogger(__name__)
 
 
 def record_while_held(sample_rate: int = 16000, device: str | int | None = None) -> np.ndarray:
@@ -11,7 +15,7 @@ def record_while_held(sample_rate: int = 16000, device: str | int | None = None)
     def _callback(indata: np.ndarray, frames: int, time, status) -> None:
         chunks.append(indata.copy())
 
-    print("Recording... press Enter to stop.")
+    _logger.info("Recording... press Enter to stop.")
     with sd.InputStream(
         samplerate=sample_rate,
         channels=1,
