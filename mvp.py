@@ -6,15 +6,21 @@ Press Enter to start recording, Enter again to stop.
 """
 from __future__ import annotations
 
-import logging
 import os
 import sys
 
-os.environ.setdefault(
-    "LD_LIBRARY_PATH",
+_CUDA_LIBS = (
     "/home/sgk/.venvs/transcribe/lib/python3.12/site-packages/nvidia/cublas/lib"
-    ":/home/sgk/.venvs/transcribe/lib/python3.12/site-packages/nvidia/cudnn/lib",
+    ":/home/sgk/.venvs/transcribe/lib/python3.12/site-packages/nvidia/cudnn/lib"
 )
+
+# LD_LIBRARY_PATH must be set before the process starts so the dynamic linker
+# picks up CUDA libraries. If it's missing, re-exec this script with the path set.
+if "cublas" not in os.environ.get("LD_LIBRARY_PATH", ""):
+    os.environ["LD_LIBRARY_PATH"] = _CUDA_LIBS + ":" + os.environ.get("LD_LIBRARY_PATH", "")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+import logging
 
 logging.basicConfig(
     level=logging.INFO,
