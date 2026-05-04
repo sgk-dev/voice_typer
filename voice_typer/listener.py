@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import select
 import threading
 from typing import Callable
 
@@ -21,6 +22,8 @@ def _find_keyboards() -> list[evdev.InputDevice]:
             if ecodes.KEY_F9 in keys:
                 devices.append(dev)
                 _logger.debug("Found keyboard: %s — %s", dev.path, dev.name)
+            else:
+                dev.close()
         except Exception as exc:
             _logger.debug("Skipping %s: %s", path, exc)
     return devices
@@ -66,14 +69,16 @@ class PttListener:
 
     def _read_device(self, dev: evdev.InputDevice) -> None:
         try:
-            for event in dev.read_loop():
-                if self._stop_event.is_set():
-                    break
-                if event.type != ecodes.EV_KEY or event.code != self._key:
+            while not self._stop_event.is_set():
+                r, _, _ = select.select([dev.fd], [], [], 0.1)
+                if not r:
                     continue
-                if event.value == 1:   # key down
-                    self._on_press()
-                elif event.value == 0: # key up
-                    self._on_release()
+                for event in dev.read():
+                    if event.type != ecodes.EV_KEY or event.code != self._key:
+                        continue
+                    if event.value == 1:    # key down
+                        self._on_press()
+                    elif event.value == 0:  # key up
+                        self._on_release()
         except OSError as exc:
             _logger.warning("Device read error (%s): %s", dev.path, exc)
