@@ -33,22 +33,20 @@ def main() -> None:
     transcriber = Transcriber(cfg)
     print("Ready.\n")
 
-    while True:
-        print("Press Enter to start recording (Ctrl+C to quit)...")
-        try:
+    try:
+        while True:
+            print("Press Enter to start recording (Ctrl+C to quit)...")
             input()
-        except KeyboardInterrupt:
-            print("\nBye.")
-            sys.exit(0)
-
-        audio = record_while_held(sample_rate=cfg.sample_rate)
-        print("Transcribing...")
-        result = transcriber.transcribe(audio)
-
-        if result:
-            print(f"\n>>> {result}\n")
-        else:
-            print("(nothing recognized — silence or low confidence)\n")
+            audio = record_while_held(sample_rate=cfg.sample_rate, device=cfg.audio_device)
+            print("Transcribing...")
+            result = transcriber.transcribe(audio)
+            if result:
+                print(f"\n>>> {result}\n")
+            else:
+                print("(nothing recognized — silence or low confidence)\n")
+    except KeyboardInterrupt:
+        print("\nBye.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
