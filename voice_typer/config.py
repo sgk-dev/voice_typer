@@ -7,6 +7,10 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "voice_typer" / "config.toml"
 
+_DEFAULT_TERMINAL_APPS: list[str] = [
+    "gnome-terminal", "alacritty", "kitty", "tilix", "xterm", "bash", "zsh", "tmux"
+]
+
 
 @dataclass
 class Config:
@@ -17,9 +21,7 @@ class Config:
     audio_device: str | None = None
     sample_rate: int = 16000
     hotkey: str = "KEY_F9"
-    terminal_apps: list[str] = field(default_factory=lambda: [
-        "gnome-terminal", "alacritty", "kitty", "tilix", "xterm", "bash", "zsh", "tmux"
-    ])
+    terminal_apps: list[str] = field(default_factory=lambda: list(_DEFAULT_TERMINAL_APPS))
     sleep_after_paste: float = 0.05
     log_file: str = str(Path.home() / ".local" / "share" / "voice_typer" / "voice_typer.log")
     log_max_bytes: int = 5_242_880
@@ -46,7 +48,7 @@ def load_config() -> Config:
         audio_device=a.get("device", Config.audio_device),
         sample_rate=a.get("sample_rate", Config.sample_rate),
         hotkey=h.get("key", Config.hotkey),
-        terminal_apps=i.get("terminal_apps", Config().terminal_apps),
+        terminal_apps=i.get("terminal_apps", _DEFAULT_TERMINAL_APPS),
         sleep_after_paste=i.get("sleep_after_paste", Config.sleep_after_paste),
         log_file=lg.get("file", Config.log_file),
         log_max_bytes=lg.get("max_bytes", Config.log_max_bytes),
