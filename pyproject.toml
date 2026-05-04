@@ -1,0 +1,17 @@
+[project]
+name = "voice-typer"
+version = "0.1.0"
+description = "Push-to-talk voice input daemon for Linux/Wayland"
+requires-python = ">=3.12"
+
+dependencies = [
+    "faster-whisper",
+    "sounddevice",
+    "evdev",
+    "pystray",
+    "Pillow",
+    "dbus-python",
+]
+
+[project.scripts]
+voice-typer = "cli.voice_typer_cli:main"
