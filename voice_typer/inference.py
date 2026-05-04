@@ -32,13 +32,11 @@ class Transcriber:
             language=language,
             beam_size=5,
             vad_filter=True,
+            no_speech_threshold=0.5,
         )
 
         lines = []
         for segment in segments:
-            if segment.no_speech_prob > 0.5:
-                _logger.debug("Skipping segment (no_speech_prob=%.2f)", segment.no_speech_prob)
-                continue
             text = segment.text.strip()
             if text:
                 lines.append(text)
