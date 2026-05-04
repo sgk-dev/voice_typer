@@ -52,16 +52,16 @@ def inject(text: str, terminal_apps: list[str] | None = None, sleep_after: float
             stderr=subprocess.DEVNULL,
             timeout=2,
         )
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         backup = None
 
     try:
-        # Put recognized text into clipboard
-        subprocess.run(["wl-copy", text], check=True, timeout=2)
-
-        # Detect window type and choose paste shortcut
+        # Detect window type FIRST (closer to when user released PTT key)
         wm_class = _get_active_wm_class()
         is_term = wm_class in apps
+
+        # Put recognized text into clipboard
+        subprocess.run(["wl-copy", text], check=True, timeout=2)
 
         if is_term:
             _logger.debug("Terminal detected (%s) — using Ctrl+Shift+V", wm_class)
@@ -84,4 +84,4 @@ def inject(text: str, terminal_apps: list[str] | None = None, sleep_after: float
         if backup is not None:
             subprocess.run(["wl-copy", "--"], input=backup, timeout=2)
         else:
-            subprocess.run(["wl-copy", ""], timeout=2)
+            subprocess.run(["wl-copy", "--clear"], timeout=2)
