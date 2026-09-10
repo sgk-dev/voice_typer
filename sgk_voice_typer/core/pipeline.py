@@ -42,6 +42,7 @@ class SgkDictationPipeline:
         transcribe_executor: Executor,
         max_duration_s: float = 300.0,
         lock_hold_s: float = 3.0,
+        preview_interval_s: float = 0.0,
     ) -> None:
         self._recorder = recorder
         self._transcriber = transcriber
@@ -50,21 +51,32 @@ class SgkDictationPipeline:
         self._executor = transcribe_executor
         self._max_duration_s = max_duration_s
         self._lock_hold_s = lock_hold_s
+        self._preview_interval_s = preview_interval_s
 
         self._active = False
         self._processing = False
         self._terminal = False
         self._locked = False
+        self._generation = 0            # bumps each recording; stale preview results are dropped
         self._watchdog: asyncio.TimerHandle | None = None
         self._lock_timer: asyncio.TimerHandle | None = None
+        self._preview_task: asyncio.Task | None = None
         self._on_state: Callable[[str], None] | None = None
         self._on_lock: Callable[[bool], None] | None = None
+        self._on_partial: Callable[[str], None] | None = None
 
     def sgk_set_state_listener(self, cb: Callable[[str], None]) -> None:
         self._on_state = cb
 
     def sgk_set_lock_listener(self, cb: Callable[[bool], None]) -> None:
         self._on_lock = cb
+
+    def sgk_set_partial_listener(self, cb: Callable[[str], None]) -> None:
+        """cb(text) is called with the growing transcript while recording."""
+        self._on_partial = cb
+
+    def sgk_set_preview_interval(self, seconds: float) -> None:
+        self._preview_interval_s = seconds
 
     def sgk_set_recorder(self, recorder) -> None:
         """Swap the recorder (settings dialog changed the microphone)."""
@@ -99,6 +111,13 @@ class SgkDictationPipeline:
             except Exception as exc:
                 _logger.debug("sgk_lock_listener_error", extra={"error": str(exc)})
 
+    def _emit_partial(self, text: str) -> None:
+        if self._on_partial:
+            try:
+                self._on_partial(text)
+            except Exception as exc:
+                _logger.debug("sgk_partial_listener_error", extra={"error": str(exc)})
+
     # ------------------------------------------------------------------
     # hotkey entry points (coroutines, scheduled by the hotkey manager)
     # ------------------------------------------------------------------
@@ -112,6 +131,7 @@ class SgkDictationPipeline:
             return
         self._active = True
         self._terminal = terminal
+        self._generation += 1
         ok = self._recorder.start()
         if not ok:
             self._active = False
@@ -121,6 +141,8 @@ class SgkDictationPipeline:
         self._watchdog = self._loop.call_later(self._max_duration_s, self._sgk_auto_stop)
         if self._lock_hold_s > 0:
             self._lock_timer = self._loop.call_later(self._lock_hold_s, self._sgk_engage_lock)
+        if self._preview_interval_s > 0 and self._on_partial is not None:
+            self._preview_task = self._loop.create_task(self._sgk_preview_loop(self._generation))
 
     async def sgk_on_release(self, terminal: bool) -> None:
         if self._locked or not self._active:
@@ -140,6 +162,29 @@ class SgkDictationPipeline:
             self._loop.create_task(self._sgk_finish(capped=True))
 
     # ------------------------------------------------------------------
+    # live preview: re-transcribe the audio-so-far on an interval
+    # ------------------------------------------------------------------
+
+    async def _sgk_preview_loop(self, gen: int) -> None:
+        try:
+            while self._active and gen == self._generation:
+                await asyncio.sleep(self._preview_interval_s)
+                if not self._active or gen != self._generation:
+                    break
+                audio = self._recorder.snapshot()
+                if audio is None or audio.size < 12000:   # < ~0.75 s
+                    continue
+                try:
+                    text = await self._loop.run_in_executor(
+                        self._executor, self._transcriber.transcribe, audio
+                    )
+                except Exception as exc:
+                    _logger.debug("sgk_preview_error", extra={"error": str(exc)})
+                    continue
+                if text and self._active and gen == self._generation:
+                    self._emit_partial(text)
+        except asyncio.CancelledError:
+            pass
 
     def _sgk_cancel_timers(self) -> None:
         for attr in ("_watchdog", "_lock_timer"):
@@ -147,6 +192,9 @@ class SgkDictationPipeline:
             if handle is not None:
                 handle.cancel()
                 setattr(self, attr, None)
+        if self._preview_task is not None:
+            self._preview_task.cancel()
+            self._preview_task = None
 
     async def _sgk_finish(self, capped: bool) -> None:
         if not self._active:

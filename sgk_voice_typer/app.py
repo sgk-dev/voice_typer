@@ -113,9 +113,15 @@ class SgkApp:
             self._executor,
             max_duration_s=behavior.get("max_duration_s", 300.0),
             lock_hold_s=behavior.get("lock_hold_s", 3.0),
+            preview_interval_s=(
+                feedback.get("preview_interval_s", 1.5)
+                if feedback.get("live_preview", True) and not self._no_gui
+                else 0.0
+            ),
         )
         self._pipeline.sgk_set_state_listener(self._sgk_on_state)
         self._pipeline.sgk_set_lock_listener(self._sgk_on_lock)
+        self._pipeline.sgk_set_partial_listener(self._sgk_on_partial)
 
         self._loop_thread = threading.Thread(
             target=self._loop.run_forever, name="sgk-asyncio", daemon=True
@@ -246,6 +252,7 @@ class SgkApp:
                 level_getter=self._pipeline.sgk_current_level,
                 position=fb_cfg.get("overlay_position", "bottom-center"),
                 screen=fb_cfg.get("overlay_screen", "auto"),
+                preview=fb_cfg.get("live_preview", True),
             )
             self._overlay.sgk_create()
 
@@ -269,6 +276,10 @@ class SgkApp:
     def _sgk_on_lock(self, locked: bool) -> None:
         if self._overlay is not None:
             self._overlay.sgk_set_locked(locked)
+
+    def _sgk_on_partial(self, text: str) -> None:
+        if self._overlay is not None:
+            self._overlay.sgk_set_preview(text)
 
     @staticmethod
     def _sgk_pick_qt_platform() -> None:
@@ -330,7 +341,13 @@ class SgkApp:
         if self._cues is not None:
             self._cues.sgk_set(
                 enabled=fb.get("sound_enabled", True),
-                volume=fb.get("sound_volume", 0.25),
+                volume=fb.get("sound_volume", 0.18),
+            )
+        if self._pipeline is not None:
+            self._pipeline.sgk_set_preview_interval(
+                fb.get("preview_interval_s", 1.5)
+                if fb.get("live_preview", True) and not self._no_gui
+                else 0.0
             )
 
         # Microphone / min-duration can be swapped live.

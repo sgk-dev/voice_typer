@@ -56,6 +56,8 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
         "overlay_enabled": True,
         "overlay_position": "bottom-center",   # currently the only value
         "overlay_screen": "auto",     # "auto" (follow the focused window) | "primary" | "pointer"
+        "live_preview": True,         # show the growing transcript in the overlay while speaking
+        "preview_interval_s": 1.5,    # how often to re-transcribe for the preview
     },
     "logging": {
         "level": "INFO",

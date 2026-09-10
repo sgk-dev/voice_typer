@@ -17,9 +17,9 @@ def qapp():
     yield app
 
 
-def _overlay(getter=lambda: 0.0) -> SgkListeningOverlay:
+def _overlay(getter=lambda: 0.0, preview=False) -> SgkListeningOverlay:
     # screen="primary" keeps the tests off xdotool
-    return SgkListeningOverlay(level_getter=getter, screen="primary")
+    return SgkListeningOverlay(level_getter=getter, screen="primary", preview=preview)
 
 
 def test_set_listening_is_thread_safe_flag_only(qapp) -> None:
@@ -60,6 +60,26 @@ def test_lock_flag_and_paint_do_not_raise(qapp) -> None:
     ov.sgk_destroy()
 
 
+def test_preview_widget_is_wider_and_taller(qapp) -> None:
+    narrow = _overlay(preview=False)
+    wide = _overlay(preview=True)
+    assert wide._w_px > narrow._w_px
+    assert wide._h_px > narrow._h_px
+
+
+def test_preview_text_set_and_cleared_on_stop(qapp) -> None:
+    ov = _overlay(preview=True)
+    ov.sgk_create()
+    ov.sgk_set_listening(True)
+    ov.sgk_set_preview("привет как дела")
+    assert ov._preview_text == "привет как дела"
+    for _ in range(3):
+        ov._render_tick()          # paints the transcript band, must not raise
+    ov.sgk_set_listening(False)
+    assert ov._preview_text == ""  # cleared when the recording ends
+    ov.sgk_destroy()
+
+
 def test_render_tick_survives_getter_exception(qapp) -> None:
     def _boom() -> float:
         raise RuntimeError("recorder gone")
@@ -77,7 +97,6 @@ def test_screen_mode_normalised() -> None:
 
 class TestActiveWindowCentre:
     def test_parses_xdotool_shell_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import subprocess
 
         from sgk_voice_typer.gui import overlay as mod
 

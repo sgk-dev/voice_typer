@@ -1,13 +1,18 @@
-"""On-screen "listening" indicator: a rounded pill of equaliser bars.
+"""On-screen "listening" indicator: a rounded pill of equaliser bars, optionally
+with a live-transcript band above them.
 
 Frameless, always-on-top, click-through, translucent. Shown only while a
 recording is in progress, at the bottom-centre of a screen chosen by
 ``screen`` mode: ``auto`` follows the focused window (via ``xdotool`` under
 XWayland, falling back to the primary screen), ``primary`` pins it, ``pointer``
-uses the screen under the mouse. The bar heights follow the microphone RMS
-level, read from a getter on a 33 ms render timer - no Qt object is touched off
-the Qt thread (``sgk_set_listening`` just flips a flag, a 120 ms timer
-reconciles).
+uses the screen under the mouse.
+
+The bar heights follow the microphone RMS level, read from a getter on a 33 ms
+render timer. With ``preview=True`` the widget is wider and taller, and the top
+band shows the growing transcript (``sgk_set_preview``) as the pipeline
+re-transcribes the audio so far - nothing is typed into the focused app until
+the recording stops. No Qt object is touched off the Qt thread: the setters
+just store values, a 120 ms timer reconciles visibility, the 33 ms timer paints.
 """
 
 from __future__ import annotations
@@ -23,7 +28,10 @@ from sgk_voice_typer.utils.logger import sgk_get_logger
 _logger = sgk_get_logger(__name__)
 
 _BARS = 15
-_W, _H = 240, 56
+_BARS_H = 56               # height of the equaliser band
+_PREVIEW_H = 46            # height of the live-transcript band (when enabled)
+_NARROW_W = 240
+_WIDE_W = 460
 _BOTTOM_MARGIN = 96
 _LEVEL_GAIN = 9.0          # RMS (~0.03 speech) -> 0..1 bar fill
 _RENDER_MS = 33
@@ -36,10 +44,14 @@ class SgkListeningOverlay:
         level_getter: Callable[[], float],
         position: str = "bottom-center",
         screen: str = "auto",
+        preview: bool = False,
     ) -> None:
         self._level_getter = level_getter
         self._position = position
         self._screen_mode = screen if screen in ("auto", "primary", "pointer") else "auto"
+        self._preview_enabled = preview
+        self._w_px = _WIDE_W if preview else _NARROW_W
+        self._h_px = (_BARS_H + _PREVIEW_H) if preview else _BARS_H
         self._widget: Any = None
         self._render_timer: Any = None
         self._reconcile_timer: Any = None
@@ -47,6 +59,7 @@ class SgkListeningOverlay:
         self._want_visible = False
         self._locked = False
         self._warned = False
+        self._preview_text = ""
         self._bars = [0.0] * _BARS
         self._phase = [random.uniform(0, math.tau) for _ in range(_BARS)]
 
@@ -58,9 +71,13 @@ class SgkListeningOverlay:
         self._want_visible = bool(listening)
         if not listening:
             self._locked = False
+            self._preview_text = ""
 
     def sgk_set_locked(self, locked: bool) -> None:
         self._locked = bool(locked)
+
+    def sgk_set_preview(self, text: str) -> None:
+        self._preview_text = text or ""
 
     # ------------------------------------------------------------------
     # Qt thread
@@ -85,7 +102,7 @@ class SgkListeningOverlay:
         w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         w.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        w.resize(_W, _H)
+        w.resize(self._w_px, self._h_px)
         w.setWindowOpacity(0.0)
         w.paintEvent = self._paint_event  # type: ignore[assignment,method-assign]
         self._widget = w
@@ -136,9 +153,9 @@ class SgkListeningOverlay:
             if screen is None:
                 return
             geo = screen.availableGeometry()
-            x = geo.x() + (geo.width() - _W) // 2
-            y = geo.y() + geo.height() - _H - _BOTTOM_MARGIN
-            w.setGeometry(x, y, _W, _H)
+            x = geo.x() + (geo.width() - self._w_px) // 2
+            y = geo.y() + geo.height() - self._h_px - _BOTTOM_MARGIN
+            w.setGeometry(x, y, self._w_px, self._h_px)
             w.move(x, y)
             if QGuiApplication.platformName() == "wayland" and not self._warned:
                 self._warned = True
@@ -224,38 +241,62 @@ class SgkListeningOverlay:
 
     def _paint_event(self, _event) -> None:
         from PyQt6.QtCore import QRectF, Qt
-        from PyQt6.QtGui import QColor, QPainter
+        from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter
 
         w = self._widget
+        wpx, hpx = self._w_px, self._h_px
+        bars_top = hpx - _BARS_H
+
         p = QPainter(w)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        p.setBrush(QColor(20, 20, 24, 205))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(QRectF(0, 0, _W, _H), _H / 2, _H / 2)
+        p.setBrush(QColor(20, 20, 24, 210))
+        radius = min(_BARS_H, hpx) / 2
+        p.drawRoundedRect(QRectF(0, 0, wpx, hpx), radius, radius)
 
+        # --- live transcript band ---
+        if self._preview_enabled:
+            band = QRectF(18, 8, wpx - 36, _PREVIEW_H - 10)
+            font = QFont()
+            font.setPointSize(10)
+            p.setFont(font)
+            fm = QFontMetrics(font)
+            text = self._preview_text.strip()
+            if text:
+                # keep the newest words: elide from the left
+                shown = fm.elidedText(text, Qt.TextElideMode.ElideLeft,
+                                      int(band.width()) * 2)
+                p.setPen(QColor(232, 236, 245, 245))
+                p.drawText(band, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                                     | Qt.TextFlag.TextWordWrap), shown)
+            else:
+                p.setPen(QColor(150, 155, 165, 180))
+                p.drawText(band, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                           "…")
+            p.setPen(Qt.PenStyle.NoPen)
+
+        # --- equaliser ---
         pad_x, pad_y = 22, 12
         lock_w = 24 if self._locked else 0
-        area_w = _W - 2 * pad_x - lock_w
-        area_h = _H - 2 * pad_y
+        area_w = wpx - 2 * pad_x - lock_w
+        area_h = _BARS_H - 2 * pad_y
         bar_w = area_w / (_BARS * 2 - 1)
         p.setBrush(QColor(90, 170, 255, 235))
         for i, v in enumerate(self._bars):
             bh = max(3.0, v * area_h)
             x = pad_x + i * 2 * bar_w
-            y = pad_y + (area_h - bh) / 2
+            y = bars_top + pad_y + (area_h - bh) / 2
             p.drawRoundedRect(QRectF(x, y, bar_w, bh), bar_w / 2, bar_w / 2)
 
         if self._locked:
-            self._draw_lock(p, QColor(255, 210, 120, 245))
+            self._draw_lock(p, QColor(255, 210, 120, 245), wpx, bars_top + _BARS_H / 2)
         p.end()
 
-    def _draw_lock(self, p, color) -> None:
+    def _draw_lock(self, p, color, cx: float, cy: float) -> None:
         from PyQt6.QtCore import QRectF, Qt
         from PyQt6.QtGui import QPen
 
-        cx = _W - 22
-        cy = _H / 2
+        cx = cx - 22
         body = QRectF(cx - 7, cy - 1, 14, 11)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(color)

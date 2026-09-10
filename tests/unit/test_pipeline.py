@@ -194,3 +194,53 @@ async def test_duration_cap_clears_lock(executor) -> None:
     await asyncio.sleep(0.3)
     assert p._locks == [True, False]
     assert clip.events == ["save", "type:capped:False", "restore"]
+
+
+class _SnapRecorder(_FakeRecorder):
+    """Recorder whose snapshot() grows over time."""
+
+    def __init__(self, audio) -> None:
+        super().__init__(audio)
+        self.snaps = 0
+
+    def snapshot(self):
+        self.snaps += 1
+        return self._audio
+
+
+async def test_live_preview_emits_partials_and_final_is_authoritative(executor) -> None:
+    rec = _SnapRecorder(AUDIO)
+    clip = _FakeClipboard()
+    partials: list[str] = []
+    loop = asyncio.get_event_loop()
+    p = SgkDictationPipeline(
+        rec, _FakeTranscriber("partial and final"), clip, loop, executor,
+        preview_interval_s=0.05,
+    )
+    p.sgk_set_partial_listener(partials.append)
+
+    await p.sgk_on_press(terminal=False)
+    await asyncio.sleep(0.22)                 # a few preview ticks
+    await p.sgk_on_release(terminal=False)
+    await asyncio.sleep(0.05)
+
+    assert rec.snaps >= 2
+    assert partials and all(t == "partial and final" for t in partials)
+    assert clip.events == ["save", "type:partial and final:False", "restore"]
+    assert p._preview_task is None           # cancelled on finish
+
+
+async def test_preview_disabled_by_zero_interval(executor) -> None:
+    rec = _SnapRecorder(AUDIO)
+    partials: list[str] = []
+    loop = asyncio.get_event_loop()
+    p = SgkDictationPipeline(
+        rec, _FakeTranscriber("x"), _FakeClipboard(), loop, executor,
+        preview_interval_s=0.0,
+    )
+    p.sgk_set_partial_listener(partials.append)
+    await p.sgk_on_press(terminal=False)
+    await asyncio.sleep(0.15)
+    await p.sgk_on_release(terminal=False)
+    assert partials == []
+    assert rec.snaps == 0

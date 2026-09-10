@@ -57,9 +57,13 @@ class TestDefaults:
 
     def test_default_feedback(self, config: SgkConfig) -> None:
         data = config.sgk_load()
-        assert data["feedback"]["sound_enabled"] is True
-        assert 0.0 <= data["feedback"]["sound_volume"] <= 1.0
-        assert data["feedback"]["overlay_enabled"] is True
+        fb = data["feedback"]
+        assert fb["sound_enabled"] is True
+        assert 0.0 <= fb["sound_volume"] <= 1.0
+        assert fb["overlay_enabled"] is True
+        assert fb["overlay_screen"] == "auto"
+        assert fb["live_preview"] is True
+        assert fb["preview_interval_s"] > 0
 
 
 class TestLoadSave:
