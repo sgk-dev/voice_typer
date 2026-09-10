@@ -26,6 +26,7 @@ import os
 import select
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 from sgk_voice_typer.input.base import SgkHotkeyCallback, SgkInputBackend
 from sgk_voice_typer.utils.logger import sgk_get_logger
@@ -223,7 +224,7 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
             pressed_mods: set[str] = set()
             active_hold: dict[int, str] = {}
             stop_r = self._stop_pipe[0] if self._stop_pipe else None
-            fds: dict[int, object] = {dev.fd: dev for dev in keyboards}
+            fds: dict[int, Any] = {dev.fd: dev for dev in keyboards}
             if stop_r is not None:
                 fds[stop_r] = None
 
@@ -240,13 +241,13 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
                     if dev is None:
                         continue
                     try:
-                        for event in dev.read():  # type: ignore[union-attr]
+                        for event in dev.read():
                             if event.type != evdev.ecodes.EV_KEY:
                                 continue
                             try:
                                 ke = evdev.categorize(event)
                                 self._sgk_dispatch(
-                                    ke.scancode, ke.keystate,
+                                    ke.scancode, ke.keystate,  # type: ignore[union-attr]
                                     pressed_mods, active_hold,
                                     mod_code_to_name, trigger_codes,
                                 )
