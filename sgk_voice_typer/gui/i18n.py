@@ -67,6 +67,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "cfg.beh.min_dur": {"en": "Ignore clips shorter than (s):", "ru": "Игнорировать записи короче (с):"},
     "cfg.beh.max_dur": {"en": "Stop recording after (s):", "ru": "Останавливать запись через (с):"},
+    "cfg.beh.lock_on": {"en": "Hands-free lock:", "ru": "Режим фиксации (hands-free):"},
+    "cfg.beh.lock_after": {"en": "Lock after holding (s):", "ru": "Фиксировать после удержания (с):"},
     "cfg.beh.no_speech": {"en": "Silence threshold (0-1):", "ru": "Порог тишины (0-1):"},
     "cfg.beh.restore": {"en": "Restore clipboard after typing:", "ru": "Восстанавливать буфер после ввода:"},
     "cfg.beh.settle": {"en": "Clipboard settle delay (ms):", "ru": "Задержка буфера обмена (мс):"},

@@ -189,7 +189,15 @@ class SgkConfigDialog:
             return s
 
         min_s = _dspin(0.0, 5.0, 0.1, beh.get("min_duration_s", 0.3))
-        max_s = _dspin(1.0, 600.0, 1.0, beh.get("max_duration_s", 60.0), dec=0)
+        max_s = _dspin(1.0, 600.0, 1.0, beh.get("max_duration_s", 300.0), dec=0)
+
+        lock_hold = float(beh.get("lock_hold_s", 3.0))
+        lock_on = QCheckBox()
+        lock_on.setChecked(lock_hold > 0)
+        lock_s = _dspin(0.5, 15.0, 0.5, lock_hold if lock_hold > 0 else 3.0, dec=1)
+        lock_s.setEnabled(lock_on.isChecked())
+        lock_on.toggled.connect(lock_s.setEnabled)
+
         nsp = _dspin(0.0, 1.0, 0.05, beh.get("no_speech_threshold", 0.5))
         restore = QCheckBox()
         restore.setChecked(bool(beh.get("restore_clipboard", True)))
@@ -198,11 +206,16 @@ class SgkConfigDialog:
         settle.setValue(int(beh.get("clipboard_settle_ms", 80)))
         bf.addRow(self._tr("cfg.beh.min_dur"), min_s)
         bf.addRow(self._tr("cfg.beh.max_dur"), max_s)
+        bf.addRow(self._tr("cfg.beh.lock_on"), lock_on)
+        bf.addRow(self._tr("cfg.beh.lock_after"), lock_s)
         bf.addRow(self._tr("cfg.beh.no_speech"), nsp)
         bf.addRow(self._tr("cfg.beh.restore"), restore)
         bf.addRow(self._tr("cfg.beh.settle"), settle)
         tabs.addTab(b, self._tr("cfg.tab.behavior"))
-        self._w.update(min_s=min_s, max_s=max_s, nsp=nsp, restore=restore, settle=settle)
+        self._w.update(
+            min_s=min_s, max_s=max_s, lock_on=lock_on, lock_s=lock_s,
+            nsp=nsp, restore=restore, settle=settle,
+        )
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -242,6 +255,7 @@ class SgkConfigDialog:
         new.setdefault("behavior", {}).update(
             min_duration_s=round(w["min_s"].value(), 2),
             max_duration_s=round(w["max_s"].value(), 1),
+            lock_hold_s=round(w["lock_s"].value(), 1) if w["lock_on"].isChecked() else 0.0,
             no_speech_threshold=round(w["nsp"].value(), 2),
             restore_clipboard=w["restore"].isChecked(),
             clipboard_settle_ms=settle,

@@ -40,6 +40,29 @@ def test_collect_roundtrips_defaults(qapp) -> None:
     assert out["model"]["name"] == "large-v3-turbo"
     assert out["audio"]["device"] is None
     assert out["behavior"]["clipboard_settle_ms"] == out["behavior"]["paste_settle_ms"]
+    assert out["behavior"]["lock_hold_s"] == pytest.approx(3.0)
+
+
+def test_lock_toggle_and_delay(qapp) -> None:
+    d = SgkConfigDialog(SgkConfig.sgk_get_default(), on_save=lambda _c: None)
+    dlg = QDialog()
+    d._sgk_build(dlg)
+
+    d._w["lock_on"].setChecked(True)
+    d._w["lock_s"].setValue(5.5)
+    assert d._sgk_collect()["behavior"]["lock_hold_s"] == pytest.approx(5.5)
+
+    d._w["lock_on"].setChecked(False)
+    assert d._w["lock_s"].isEnabled() is False           # greyed out when off
+    assert d._sgk_collect()["behavior"]["lock_hold_s"] == 0.0
+
+    # a config that had the lock disabled loads with the box unchecked
+    cfg = SgkConfig.sgk_get_default()
+    cfg["behavior"]["lock_hold_s"] = 0.0
+    d2 = SgkConfigDialog(cfg, on_save=lambda _c: None)
+    dlg2 = QDialog()
+    d2._sgk_build(dlg2)
+    assert d2._w["lock_on"].isChecked() is False
 
 
 def test_edited_values_are_collected(qapp) -> None:
