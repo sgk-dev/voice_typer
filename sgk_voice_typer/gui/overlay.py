@@ -29,13 +29,22 @@ _logger = sgk_get_logger(__name__)
 
 _BARS = 15
 _BARS_H = 56               # height of the equaliser band
-_PREVIEW_H = 46            # height of the live-transcript band (when enabled)
 _NARROW_W = 240
 _WIDE_W = 460
+_PREVIEW_PAD_X = 20        # inset of the transcript text from the pill edge
+_PREVIEW_PAD_Y = 12        # top + bottom inset of the transcript band
+_PREVIEW_LINE_H = 20
+_PREVIEW_MIN_LINES = 1
+_PREVIEW_MAX_LINES = 6
 _BOTTOM_MARGIN = 96
 _LEVEL_GAIN = 9.0          # RMS (~0.03 speech) -> 0..1 bar fill
 _RENDER_MS = 33
 _RECONCILE_MS = 120
+
+
+def _preview_band_h(lines: int) -> int:
+    lines = max(_PREVIEW_MIN_LINES, min(_PREVIEW_MAX_LINES, lines))
+    return 2 * _PREVIEW_PAD_Y + lines * _PREVIEW_LINE_H
 
 
 class SgkListeningOverlay:
@@ -51,7 +60,9 @@ class SgkListeningOverlay:
         self._screen_mode = screen if screen in ("auto", "primary", "pointer") else "auto"
         self._preview_enabled = preview
         self._w_px = _WIDE_W if preview else _NARROW_W
-        self._h_px = (_BARS_H + _PREVIEW_H) if preview else _BARS_H
+        self._h_px = (_BARS_H + _preview_band_h(_PREVIEW_MIN_LINES)) if preview else _BARS_H
+        self._anchor_x = 0
+        self._anchor_bottom = 0    # y of the pill's bottom edge; the pill grows upward
         self._widget: Any = None
         self._render_timer: Any = None
         self._reconcile_timer: Any = None
@@ -153,10 +164,13 @@ class SgkListeningOverlay:
             if screen is None:
                 return
             geo = screen.availableGeometry()
-            x = geo.x() + (geo.width() - self._w_px) // 2
-            y = geo.y() + geo.height() - self._h_px - _BOTTOM_MARGIN
-            w.setGeometry(x, y, self._w_px, self._h_px)
-            w.move(x, y)
+            if self._preview_enabled:
+                self._h_px = _BARS_H + _preview_band_h(_PREVIEW_MIN_LINES)
+            self._anchor_x = geo.x() + (geo.width() - self._w_px) // 2
+            self._anchor_bottom = geo.y() + geo.height() - _BOTTOM_MARGIN
+            y = self._anchor_bottom - self._h_px
+            w.setGeometry(self._anchor_x, y, self._w_px, self._h_px)
+            w.move(self._anchor_x, y)
             if QGuiApplication.platformName() == "wayland" and not self._warned:
                 self._warned = True
                 _logger.warning(
@@ -236,12 +250,40 @@ class SgkListeningOverlay:
             wobble = 0.12 + 0.10 * math.sin(self._phase[i])
             target = 0.06 + fill * (0.35 + 0.65 * centre) + fill * wobble
             self._bars[i] += (min(1.0, target) - self._bars[i]) * 0.4
+        if self._preview_enabled:
+            self._grow_to_fit_preview()
         if self._widget is not None:
             self._widget.update()
 
+    def _grow_to_fit_preview(self) -> None:
+        """Resize the pill so it holds the wrapped transcript, growing upward."""
+        w = self._widget
+        if w is None:
+            return
+        from PyQt6.QtCore import QRect
+        from PyQt6.QtGui import QFont, QFontMetrics
+
+        text = self._preview_text.strip()
+        lines = _PREVIEW_MIN_LINES
+        if text:
+            font = QFont()
+            font.setPointSize(10)
+            avail = self._w_px - 2 * _PREVIEW_PAD_X
+            rect = QFontMetrics(font).boundingRect(
+                QRect(0, 0, avail, 10_000),
+                int(0x1000 | 0x0004),  # TextWordWrap | AlignLeft
+                text,
+            )
+            lines = max(1, -(-rect.height() // _PREVIEW_LINE_H))  # ceil
+        want_h = _BARS_H + _preview_band_h(lines)
+        if want_h != self._h_px and self._anchor_bottom:
+            self._h_px = want_h
+            y = self._anchor_bottom - want_h
+            w.setGeometry(self._anchor_x, y, self._w_px, want_h)
+
     def _paint_event(self, _event) -> None:
         from PyQt6.QtCore import QRectF, Qt
-        from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter
+        from PyQt6.QtGui import QColor, QFont, QPainter
 
         w = self._widget
         wpx, hpx = self._w_px, self._h_px
@@ -254,25 +296,26 @@ class SgkListeningOverlay:
         radius = min(_BARS_H, hpx) / 2
         p.drawRoundedRect(QRectF(0, 0, wpx, hpx), radius, radius)
 
-        # --- live transcript band ---
-        if self._preview_enabled:
-            band = QRectF(18, 8, wpx - 36, _PREVIEW_H - 10)
+        # --- live transcript band (fills everything above the equaliser) ---
+        if self._preview_enabled and bars_top > 0:
+            band = QRectF(
+                _PREVIEW_PAD_X, _PREVIEW_PAD_Y,
+                wpx - 2 * _PREVIEW_PAD_X, bars_top - _PREVIEW_PAD_Y,
+            )
             font = QFont()
             font.setPointSize(10)
             p.setFont(font)
-            fm = QFontMetrics(font)
             text = self._preview_text.strip()
+            flags = int(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom
+                | Qt.TextFlag.TextWordWrap
+            )
             if text:
-                # keep the newest words: elide from the left
-                shown = fm.elidedText(text, Qt.TextElideMode.ElideLeft,
-                                      int(band.width()) * 2)
                 p.setPen(QColor(232, 236, 245, 245))
-                p.drawText(band, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-                                     | Qt.TextFlag.TextWordWrap), shown)
+                p.drawText(band, flags, text)
             else:
                 p.setPen(QColor(150, 155, 165, 180))
-                p.drawText(band, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
-                           "…")
+                p.drawText(band, flags, "…")
             p.setPen(Qt.PenStyle.NoPen)
 
         # --- equaliser ---

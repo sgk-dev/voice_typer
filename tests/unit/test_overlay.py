@@ -67,6 +67,21 @@ def test_preview_widget_is_wider_and_taller(qapp) -> None:
     assert wide._h_px > narrow._h_px
 
 
+def test_preview_pill_grows_with_text(qapp) -> None:
+    ov = _overlay(lambda: 0.02, preview=True)
+    ov.sgk_create()
+    ov._anchor_x, ov._anchor_bottom = 100, 900
+    ov.sgk_set_listening(True)
+    short_h = ov._h_px
+    ov.sgk_set_preview("one two " * 60)   # many words -> several wrapped lines
+    ov._grow_to_fit_preview()
+    assert ov._h_px > short_h
+    ov.sgk_set_preview("")
+    ov._grow_to_fit_preview()
+    assert ov._h_px == short_h            # shrinks back
+    ov.sgk_destroy()
+
+
 def test_preview_text_set_and_cleared_on_stop(qapp) -> None:
     ov = _overlay(preview=True)
     ov.sgk_create()

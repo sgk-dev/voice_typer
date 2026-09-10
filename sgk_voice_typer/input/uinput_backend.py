@@ -42,8 +42,11 @@ _SGK_NAME_TO_CODE: dict[str, int] = {
     "tab":   ecodes.KEY_TAB,
 }
 
-# Delay between the press phase and the release phase of a combo.
-_SGK_HOLD_S = 0.012
+# Held time between the press and release phase of a combo, and the small gap
+# between individual key events. Compositors on Wayland can drop a combo that is
+# pressed and released too quickly, so these are deliberately generous.
+_SGK_HOLD_S = 0.030
+_SGK_STEP_S = 0.005
 
 
 def _sgk_capabilities() -> list[int]:
@@ -109,13 +112,16 @@ class SgkUinputInjector:
     def _sgk_emit_combo(self, codes: list[int]) -> None:
         if not self._ui or not codes:
             return
+        # Press modifiers first, each in its own synced event, then the key.
         for c in codes:
             self._ui.write(ecodes.EV_KEY, c, 1)
-        self._ui.syn()
+            self._ui.syn()
+            time.sleep(_SGK_STEP_S)
         time.sleep(_SGK_HOLD_S)
         for c in reversed(codes):
             self._ui.write(ecodes.EV_KEY, c, 0)
-        self._ui.syn()
+            self._ui.syn()
+            time.sleep(_SGK_STEP_S)
 
     def sgk_send_combo(self, combo: str) -> None:
         """Send a key combination like 'ctrl+v' or 'ctrl+shift+left'."""

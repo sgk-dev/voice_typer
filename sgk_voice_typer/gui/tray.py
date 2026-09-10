@@ -42,6 +42,23 @@ def _sgk_panel_fg():
     return QColor("#f5f5f5")
 
 
+def _sgk_about_colors():
+    """(*background*, *text*, *muted*) for the About dialog.
+
+    Background and text come from the same light/dark decision so they always
+    contrast, even when the desktop hands Qt an inconsistent palette (dark
+    window colour but dark default text, a known GNOME/Qt6 bug).
+    """
+    from PyQt6.QtGui import QColor, QPalette
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    win = app.palette().color(QPalette.ColorRole.Window) if app is not None else QColor("#2b2b2b")
+    if win.lightnessF() < 0.5:
+        return QColor("#2b2b2b"), QColor("#f5f5f5"), QColor("#b3b3b3")
+    return QColor("#f7f7f7"), QColor("#1e1e1e"), QColor("#6a6a6a")
+
+
 def _sgk_make_icon(state: str, style: str = "color"):
     from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 
@@ -223,7 +240,6 @@ class SgkTrayIcon:
             from PyQt6.QtGui import QDesktopServices, QPixmap
             from PyQt6.QtWidgets import (
                 QDialog,
-                QDialogButtonBox,
                 QHBoxLayout,
                 QLabel,
                 QPushButton,
@@ -236,10 +252,21 @@ class SgkTrayIcon:
         center = Qt.AlignmentFlag.AlignCenter
         dlg = QDialog()
         dlg.setWindowTitle(sgk_tr("about.title", lang))
-        dlg.setMinimumWidth(400)
+        dlg.setMinimumWidth(360)
+
+        bg, fg, muted = _sgk_about_colors()
+        dlg.setStyleSheet(
+            f"QDialog {{ background-color: {bg.name()}; }}"
+            f"QLabel {{ color: {fg.name()}; background: transparent; }}"
+            f"QPushButton {{ color: {fg.name()}; background-color: {bg.name()}; "
+            f"border: 1px solid {muted.name()}; border-radius: 4px; "
+            f"padding: 4px 12px; }}"
+            f"QPushButton:hover {{ border-color: {fg.name()}; }}"
+        )
+
         layout = QVBoxLayout(dlg)
         layout.setSpacing(6)
-        layout.setContentsMargins(28, 22, 28, 18)
+        layout.setContentsMargins(24, 20, 24, 16)
 
         if _ICON.exists():
             logo = QLabel()
@@ -254,7 +281,7 @@ class SgkTrayIcon:
             layout.addWidget(logo)
 
         title = QLabel("<b>VoiceTyper</b>")
-        title.setStyleSheet("font-size: 16px;")
+        title.setStyleSheet(f"font-size: 16px; color: {fg.name()};")
         title.setAlignment(center)
         layout.addWidget(title)
 
@@ -269,13 +296,13 @@ class SgkTrayIcon:
             f"{sgk_tr('about.license', lang)}: GPL-3.0-or-later"
         )
         meta.setAlignment(center)
-        meta.setStyleSheet("color: palette(mid);")
+        meta.setStyleSheet(f"color: {muted.name()};")
         layout.addWidget(meta)
 
         thanks = QLabel(sgk_tr("about.thanks", lang))
         thanks.setWordWrap(True)
         thanks.setAlignment(center)
-        thanks.setStyleSheet("color: palette(mid);")
+        thanks.setStyleSheet(f"color: {muted.name()};")
         layout.addWidget(thanks)
 
         layout.addSpacing(4)
@@ -291,16 +318,7 @@ class SgkTrayIcon:
 
         signature = QLabel("Developed by SGK with ❤️")
         signature.setAlignment(center)
-        signature.setStyleSheet("color: palette(mid);")
+        signature.setStyleSheet(f"color: {muted.name()};")
         layout.addWidget(signature)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close_btn = buttons.button(QDialogButtonBox.StandardButton.Close)
-        if close_btn is not None:
-            close_btn.setText(sgk_tr("about.close", lang))
-        buttons.setCenterButtons(True)
-        buttons.rejected.connect(dlg.reject)
-        buttons.accepted.connect(dlg.accept)
-        layout.addWidget(buttons)
-        dlg.adjustSize()
         dlg.exec()
