@@ -35,6 +35,10 @@ _STRINGS: dict[str, dict[str, str]] = {
     "about.star": {"en": "★ Star on GitHub", "ru": "★ Звезда на GitHub"},
     "about.donate": {"en": "♥ Support the project", "ru": "♥ Поддержать проект"},
     "about.close": {"en": "Close", "ru": "Закрыть"},
+    "about.thanks": {
+        "en": "If VoiceTyper saves you time, a star or a small donation helps a lot.",
+        "ru": "Если VoiceTyper экономит вам время - звезда или небольшой донат очень помогают.",
+    },
     # ---- settings ----
     "cfg.title": {"en": "VoiceTyper - Settings", "ru": "VoiceTyper - Настройки"},
     "cfg.ok": {"en": "OK", "ru": "ОК"},

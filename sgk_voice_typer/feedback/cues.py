@@ -1,9 +1,10 @@
-"""Short start / stop sound cues, like a Telegram voice message.
+"""Soft start / stop chimes, in the spirit of a Telegram voice message.
 
-Two two-note blips synthesised with numpy and played through sounddevice - no
-audio files, no extra dependencies. Rising on record start, falling on stop.
-Playback is non-blocking and every failure is swallowed: a missing output
-device must never break dictation.
+Two gentle notes synthesised with numpy and played through sounddevice - no
+audio files, no extra dependencies. A rising pair when recording starts, a
+falling pair when it stops. Sine tone plus a quiet octave for warmth, a
+raised-cosine attack and an exponential decay so it reads as a soft "pop"
+rather than a beep. Playback is non-blocking and every failure is swallowed.
 """
 
 from __future__ import annotations
@@ -15,39 +16,52 @@ from sgk_voice_typer.utils.logger import sgk_get_logger
 _logger = sgk_get_logger(__name__)
 
 _SR = 44100
-_NOTE_S = 0.070
-_GAP_S = 0.010
-_FADE_S = 0.006
+_NOTE_S = 0.11
+_GAP_S = 0.028
+_ATTACK_S = 0.018
+_DECAY = 5.5            # exponential decay rate over the note
+
+# Soft, consonant intervals (C5 and G5).
+_LOW, _HIGH = 523.25, 783.99
 
 
-def _tone(freq: float, seconds: float) -> np.ndarray:
-    t = np.linspace(0.0, seconds, int(_SR * seconds), endpoint=False)
-    wave = np.sin(2.0 * np.pi * freq * t).astype("float32")
-    fade = int(_SR * _FADE_S)
-    if fade > 0 and wave.size > 2 * fade:
-        ramp = np.linspace(0.0, 1.0, fade, dtype="float32")
-        wave[:fade] *= ramp
-        wave[-fade:] *= ramp[::-1]
-    return wave
+def _note(freq: float) -> np.ndarray:
+    n = int(_SR * _NOTE_S)
+    t = np.linspace(0.0, _NOTE_S, n, endpoint=False)
+    tone = np.sin(2.0 * np.pi * freq * t) + 0.28 * np.sin(2.0 * np.pi * 2.0 * freq * t)
+
+    env = np.exp(-_DECAY * t).astype("float32")
+    a = int(_SR * _ATTACK_S)
+    if a > 0 and a < n:
+        env[:a] *= 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, a)))
+    r = min(a, n)
+    if r > 0:
+        env[-r:] *= 0.5 * (1.0 + np.cos(np.linspace(0.0, np.pi, r)))
+
+    wave = (tone * env).astype("float32")
+    peak = float(np.abs(wave).max()) or 1.0
+    return wave / peak
 
 
-def _blip(freqs: tuple[float, float]) -> np.ndarray:
+def _chime(a: float, b: float) -> np.ndarray:
     gap = np.zeros(int(_SR * _GAP_S), dtype="float32")
-    return np.concatenate([_tone(freqs[0], _NOTE_S), gap, _tone(freqs[1], _NOTE_S)])
+    return np.concatenate([_note(a), gap, _note(b)]) * 0.7
 
 
 class SgkSoundCues:
-    def __init__(self, enabled: bool = True, volume: float = 0.25) -> None:
+    def __init__(self, enabled: bool = True, volume: float = 0.18) -> None:
         self._enabled = enabled
         self._volume = max(0.0, min(1.0, volume))
-        self._start = _blip((660.0, 990.0)) * self._volume
-        self._stop = _blip((990.0, 660.0)) * self._volume
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self._start = _chime(_LOW, _HIGH) * self._volume
+        self._stop = _chime(_HIGH, _LOW) * self._volume
 
     def sgk_set(self, enabled: bool, volume: float) -> None:
         self._enabled = enabled
         self._volume = max(0.0, min(1.0, volume))
-        self._start = _blip((660.0, 990.0)) * self._volume
-        self._stop = _blip((990.0, 660.0)) * self._volume
+        self._rebuild()
 
     def play_start(self) -> None:
         self._play(self._start)

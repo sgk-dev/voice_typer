@@ -8,7 +8,7 @@ from types import ModuleType
 import numpy as np
 import pytest
 
-from sgk_voice_typer.feedback.cues import SgkSoundCues, _blip
+from sgk_voice_typer.feedback.cues import SgkSoundCues, _chime
 
 
 class _FakeSd:
@@ -31,11 +31,11 @@ def fake_sd(monkeypatch: pytest.MonkeyPatch) -> _FakeSd:
     return fake
 
 
-def test_blip_is_nonempty_float32() -> None:
-    w = _blip((440.0, 880.0))
+def test_chime_is_nonempty_float32_and_bounded() -> None:
+    w = _chime(440.0, 880.0)
     assert w.dtype == np.float32
     assert w.size > 1000
-    assert abs(float(w.max())) <= 1.0
+    assert float(np.abs(w).max()) <= 1.0
 
 
 def test_start_and_stop_play_distinct_waves(fake_sd: _FakeSd) -> None:

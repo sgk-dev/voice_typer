@@ -16,6 +16,7 @@ driven from SIGTERM/SIGINT in __main__.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -110,9 +111,11 @@ class SgkApp:
             clipboard,
             self._loop,
             self._executor,
-            max_duration_s=behavior.get("max_duration_s", 60.0),
+            max_duration_s=behavior.get("max_duration_s", 300.0),
+            lock_hold_s=behavior.get("lock_hold_s", 3.0),
         )
         self._pipeline.sgk_set_state_listener(self._sgk_on_state)
+        self._pipeline.sgk_set_lock_listener(self._sgk_on_lock)
 
         self._loop_thread = threading.Thread(
             target=self._loop.run_forever, name="sgk-asyncio", daemon=True
@@ -211,8 +214,8 @@ class SgkApp:
                 pass
 
     def _sgk_start_gui(self) -> bool:
-        """Start the Qt tray. Returns False (fall back to headless) if PyQt6 or
-        the tray module is not available (the tray lands in a later step)."""
+        """Start the Qt tray + overlay. Returns False (fall back to headless) if
+        PyQt6 is not available."""
         try:
             from PyQt6.QtWidgets import QApplication
 
@@ -222,6 +225,7 @@ class SgkApp:
             _logger.warning("sgk_gui_unavailable", extra={"error": str(exc)})
             return False
 
+        self._sgk_pick_qt_platform()
         self._qt_app = QApplication.instance() or QApplication(sys.argv)
         self._qt_app.setQuitOnLastWindowClosed(False)
 
@@ -260,6 +264,32 @@ class SgkApp:
         if self._overlay is not None:
             self._overlay.sgk_set_listening(state == "recording")
 
+    def _sgk_on_lock(self, locked: bool) -> None:
+        if self._overlay is not None:
+            self._overlay.sgk_set_locked(locked)
+
+    @staticmethod
+    def _sgk_pick_qt_platform() -> None:
+        """On GNOME Wayland, Mutter ignores client window positions, so the
+        overlay cannot sit bottom-centre. Running the GUI through XWayland
+        (xcb) fixes that - use it when the xcb-cursor lib and an X display are
+        both present, and the user has not forced a platform."""
+        import ctypes.util
+
+        if os.environ.get("QT_QPA_PLATFORM"):
+            return
+        if os.environ.get("XDG_SESSION_TYPE", "").lower() != "wayland":
+            return
+        if os.environ.get("DISPLAY") and ctypes.util.find_library("xcb-cursor"):
+            os.environ["QT_QPA_PLATFORM"] = "xcb"
+            _logger.info("sgk_qt_platform", extra={"platform": "xcb"})
+        else:
+            _logger.info(
+                "sgk_qt_platform",
+                extra={"platform": "wayland",
+                       "hint": "install libxcb-cursor0 for correct overlay placement"},
+            )
+
     def _sgk_open_settings(self) -> None:
         try:
             from sgk_voice_typer.gui.config_dialog import SgkConfigDialog
@@ -291,7 +321,8 @@ class SgkApp:
                 paste_settle_ms=beh.get("paste_settle_ms", 80),
                 restore_clipboard=bool(beh.get("restore_clipboard", True)),
             )
-            self._pipeline.sgk_set_max_duration(beh.get("max_duration_s", 60.0))
+            self._pipeline.sgk_set_max_duration(beh.get("max_duration_s", 300.0))
+            self._pipeline.sgk_set_lock_hold(beh.get("lock_hold_s", 3.0))
 
         fb = new_cfg.get("feedback", {})
         if self._cues is not None:

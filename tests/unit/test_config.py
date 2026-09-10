@@ -42,7 +42,8 @@ class TestDefaults:
         data = config.sgk_load()
         assert data["behavior"]["enabled_on_start"] is True
         assert data["behavior"]["min_duration_s"] == pytest.approx(0.3)
-        assert data["behavior"]["max_duration_s"] == pytest.approx(60.0)
+        assert data["behavior"]["max_duration_s"] == pytest.approx(300.0)
+        assert data["behavior"]["lock_hold_s"] == pytest.approx(3.0)
 
     def test_default_ui_section(self, config: SgkConfig) -> None:
         data = config.sgk_load()

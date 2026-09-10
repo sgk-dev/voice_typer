@@ -34,6 +34,8 @@ class SgkListeningOverlay:
         self._reconcile_timer: Any = None
         self._anim: Any = None
         self._want_visible = False
+        self._locked = False
+        self._warned = False
         self._bars = [0.0] * _BARS
         self._phase = [random.uniform(0, math.tau) for _ in range(_BARS)]
 
@@ -43,6 +45,11 @@ class SgkListeningOverlay:
 
     def sgk_set_listening(self, listening: bool) -> None:
         self._want_visible = bool(listening)
+        if not listening:
+            self._locked = False
+
+    def sgk_set_locked(self, locked: bool) -> None:
+        self._locked = bool(locked)
 
     # ------------------------------------------------------------------
     # Qt thread
@@ -61,6 +68,7 @@ class SgkListeningOverlay:
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
+            | Qt.WindowType.X11BypassWindowManagerHint
             | Qt.WindowType.WindowTransparentForInput,
         )
         w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -119,7 +127,16 @@ class SgkListeningOverlay:
             geo = screen.availableGeometry()
             x = geo.x() + (geo.width() - _W) // 2
             y = geo.y() + geo.height() - _H - _BOTTOM_MARGIN
+            w.setGeometry(x, y, _W, _H)
             w.move(x, y)
+            if QGuiApplication.platformName() == "wayland" and not self._warned:
+                self._warned = True
+                _logger.warning(
+                    "sgk_overlay_wayland_position",
+                    extra={"hint": "install libxcb-cursor0 so the overlay can sit "
+                                   "bottom-centre (GNOME Wayland ignores client "
+                                   "window positions)"},
+                )
         except Exception as exc:
             _logger.debug("sgk_overlay_place_failed", extra={"error": str(exc)})
 
@@ -171,7 +188,8 @@ class SgkListeningOverlay:
         p.drawRoundedRect(QRectF(0, 0, _W, _H), _H / 2, _H / 2)
 
         pad_x, pad_y = 22, 12
-        area_w = _W - 2 * pad_x
+        lock_w = 24 if self._locked else 0
+        area_w = _W - 2 * pad_x - lock_w
         area_h = _H - 2 * pad_y
         bar_w = area_w / (_BARS * 2 - 1)
         p.setBrush(QColor(90, 170, 255, 235))
@@ -180,4 +198,23 @@ class SgkListeningOverlay:
             x = pad_x + i * 2 * bar_w
             y = pad_y + (area_h - bh) / 2
             p.drawRoundedRect(QRectF(x, y, bar_w, bh), bar_w / 2, bar_w / 2)
+
+        if self._locked:
+            self._draw_lock(p, QColor(255, 210, 120, 245))
         p.end()
+
+    def _draw_lock(self, p, color) -> None:
+        from PyQt6.QtCore import QRectF, Qt
+        from PyQt6.QtGui import QPen
+
+        cx = _W - 22
+        cy = _H / 2
+        body = QRectF(cx - 7, cy - 1, 14, 11)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(color)
+        p.drawRoundedRect(body, 2, 2)
+        pen = QPen(color)
+        pen.setWidth(2)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawArc(QRectF(cx - 5, cy - 9, 10, 12), 0, 180 * 16)

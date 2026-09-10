@@ -43,7 +43,8 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
     "behavior": {
         "enabled_on_start": True,
         "min_duration_s": 0.3,        # shorter clips are dropped (stray key taps)
-        "max_duration_s": 60.0,       # hard cap against a stuck key
+        "max_duration_s": 300.0,      # hard cap against a stuck key (5 min)
+        "lock_hold_s": 3.0,           # hold the key this long -> hands-free lock (0 disables)
         "no_speech_threshold": 0.5,   # skip typing if Whisper is this unsure speech occurred
         "clipboard_settle_ms": 150,
         "paste_settle_ms": 400,

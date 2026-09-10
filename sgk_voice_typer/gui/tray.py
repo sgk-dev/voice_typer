@@ -236,10 +236,10 @@ class SgkTrayIcon:
         center = Qt.AlignmentFlag.AlignCenter
         dlg = QDialog()
         dlg.setWindowTitle(sgk_tr("about.title", lang))
-        dlg.setMinimumWidth(360)
+        dlg.setMinimumWidth(400)
         layout = QVBoxLayout(dlg)
         layout.setSpacing(6)
-        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setContentsMargins(28, 22, 28, 18)
 
         if _ICON.exists():
             logo = QLabel()
@@ -272,6 +272,12 @@ class SgkTrayIcon:
         meta.setStyleSheet("color: palette(mid);")
         layout.addWidget(meta)
 
+        thanks = QLabel(sgk_tr("about.thanks", lang))
+        thanks.setWordWrap(True)
+        thanks.setAlignment(center)
+        thanks.setStyleSheet("color: palette(mid);")
+        layout.addWidget(thanks)
+
         layout.addSpacing(4)
         links = QHBoxLayout()
         links.setAlignment(center)
@@ -296,4 +302,5 @@ class SgkTrayIcon:
         buttons.rejected.connect(dlg.reject)
         buttons.accepted.connect(dlg.accept)
         layout.addWidget(buttons)
+        dlg.adjustSize()
         dlg.exec()

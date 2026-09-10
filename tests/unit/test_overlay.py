@@ -42,6 +42,20 @@ def test_create_reconcile_render_destroy_do_not_raise(qapp) -> None:
     ov.sgk_destroy()
 
 
+def test_lock_flag_and_paint_do_not_raise(qapp) -> None:
+    ov = SgkListeningOverlay(level_getter=lambda: 0.03)
+    ov.sgk_create()
+    ov.sgk_set_listening(True)
+    ov.sgk_set_locked(True)
+    assert ov._locked is True
+    for _ in range(3):
+        ov._render_tick()
+    # dropping the listening state must also drop the lock
+    ov.sgk_set_listening(False)
+    assert ov._locked is False
+    ov.sgk_destroy()
+
+
 def test_render_tick_survives_getter_exception(qapp) -> None:
     def _boom() -> float:
         raise RuntimeError("recorder gone")
