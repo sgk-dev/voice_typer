@@ -51,6 +51,18 @@ class SgkDictationPipeline:
     def sgk_set_state_listener(self, cb: Callable[[str], None]) -> None:
         self._on_state = cb
 
+    def sgk_set_recorder(self, recorder) -> None:
+        """Swap the recorder (settings dialog changed the microphone)."""
+        if not self._active:
+            self._recorder = recorder
+
+    def sgk_set_max_duration(self, seconds: float) -> None:
+        self._max_duration_s = seconds
+
+    @property
+    def clipboard(self):
+        return self._clipboard
+
     def _emit(self, state: str) -> None:
         if self._on_state:
             try:

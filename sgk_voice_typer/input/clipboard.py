@@ -43,6 +43,17 @@ class SgkClipboard:
         self._saved: str | None = None
         self._save_ok = False
 
+    def sgk_configure(
+        self,
+        clipboard_settle_ms: int,
+        paste_settle_ms: int,
+        restore_clipboard: bool,
+    ) -> None:
+        """Update the timing / restore settings at runtime (settings dialog)."""
+        self._clipboard_settle = clipboard_settle_ms / 1000.0
+        self._paste_settle = paste_settle_ms / 1000.0
+        self._restore_enabled = restore_clipboard
+
     # ------------------------------------------------------------------
     # subprocess helper
     # ------------------------------------------------------------------

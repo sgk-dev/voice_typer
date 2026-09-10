@@ -216,7 +216,7 @@ class SgkApp:
         ui_cfg = self._cfg.get("ui", {})
         self._tray = SgkTrayIcon(
             on_pause_toggle=self._sgk_toggle_enabled,
-            on_open_settings=lambda: None,
+            on_open_settings=self._sgk_open_settings,
             on_quit=self.sgk_stop,
             is_paused_getter=lambda: bool(self._hotkeys and self._hotkeys.sgk_is_paused()),
             lang=ui_cfg.get("language", "en"),
@@ -227,6 +227,64 @@ class SgkApp:
             self._pipeline.sgk_set_state_listener(self._tray.sgk_set_state)
         _logger.info("sgk_gui_started")
         return True
+
+    def _sgk_open_settings(self) -> None:
+        try:
+            from sgk_voice_typer.gui.config_dialog import SgkConfigDialog
+        except ImportError:
+            return
+        SgkConfigDialog(
+            self._cfg,
+            on_save=self._sgk_on_settings_saved,
+            on_ui_changed=self._sgk_apply_ui,
+        ).sgk_show()
+
+    def _sgk_apply_ui(self, lang: str, icon_style: str) -> None:
+        if self._tray is not None:
+            try:
+                self._tray.sgk_apply_ui(lang=lang, icon_style=icon_style)
+            except Exception as exc:
+                _logger.error("sgk_apply_ui_error", extra={"error": str(exc)})
+
+    def _sgk_on_settings_saved(self, new_cfg: dict[str, Any]) -> None:
+        old = self._cfg
+        self._config.sgk_save(new_cfg)
+        self._cfg = new_cfg
+        _logger.info("sgk_settings_saved")
+
+        beh = new_cfg.get("behavior", {})
+        if self._pipeline is not None:
+            self._pipeline.clipboard.sgk_configure(
+                clipboard_settle_ms=beh.get("clipboard_settle_ms", 80),
+                paste_settle_ms=beh.get("paste_settle_ms", 80),
+                restore_clipboard=bool(beh.get("restore_clipboard", True)),
+            )
+            self._pipeline.sgk_set_max_duration(beh.get("max_duration_s", 60.0))
+
+        # Microphone / min-duration can be swapped live.
+        new_audio = new_cfg.get("audio", {})
+        old_beh = old.get("behavior", {})
+        if new_audio != old.get("audio", {}) or beh.get("min_duration_s") != old_beh.get(
+            "min_duration_s"
+        ):
+            self._sgk_swap_recorder(new_audio, beh)
+
+        # Model and hotkey changes need a restart (the dialog says so).
+        if new_cfg.get("model", {}) != old.get("model", {}) or new_cfg.get(
+            "hotkeys", {}
+        ) != old.get("hotkeys", {}):
+            _logger.info("sgk_settings_restart_required")
+
+    def _sgk_swap_recorder(self, audio: dict[str, Any], beh: dict[str, Any]) -> None:
+        if self._pipeline is None:
+            return
+        recorder = SgkRecorder(
+            sample_rate=audio.get("sample_rate", 16000),
+            device=audio.get("device"),
+            min_duration_s=beh.get("min_duration_s", 0.3),
+        )
+        self._pipeline.sgk_set_recorder(recorder)
+        _logger.info("sgk_recorder_swapped", extra={"device": str(audio.get("device"))})
 
     def _sgk_block_until_stopped(self) -> None:
         assert self._loop_thread is not None
