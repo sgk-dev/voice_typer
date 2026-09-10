@@ -59,6 +59,10 @@ class SgkDictationPipeline:
     def sgk_set_max_duration(self, seconds: float) -> None:
         self._max_duration_s = seconds
 
+    def sgk_current_level(self) -> float:
+        """Latest mic input level (for the on-screen overlay). 0.0 when idle."""
+        return float(getattr(self._recorder, "level", 0.0) or 0.0)
+
     @property
     def clipboard(self):
         return self._clipboard

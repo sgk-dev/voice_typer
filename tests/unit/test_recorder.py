@@ -88,6 +88,19 @@ def test_double_start_keeps_single_stream() -> None:
     assert len(_FakeStream.instances) == 1
 
 
+def test_level_tracks_input_and_resets_on_stop() -> None:
+    rec = SgkRecorder(min_duration_s=0.0)
+    assert rec.level == 0.0
+    rec.start()
+    stream = _FakeStream.instances[-1]
+    for _ in range(6):
+        stream.feed(np.full(1600, 0.5, dtype="float32"))
+    assert rec.level > 0.1
+    rec._t0 = time.monotonic() - 1.0
+    rec.stop()
+    assert rec.level == 0.0
+
+
 def test_mic_open_failure_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**kwargs):
         raise OSError("no such device")

@@ -26,6 +26,7 @@ from sgk_voice_typer.asr.cuda_env import sgk_ensure_cuda_libs
 from sgk_voice_typer.core.hotkey_manager import SgkHotkeyManager
 from sgk_voice_typer.core.pipeline import SgkDictationPipeline
 from sgk_voice_typer.core.recorder import SgkRecorder
+from sgk_voice_typer.feedback.cues import SgkSoundCues
 from sgk_voice_typer.input.clipboard import SgkClipboard
 from sgk_voice_typer.input.uinput_backend import SgkUinputInjector
 from sgk_voice_typer.utils.config import SgkConfig
@@ -47,7 +48,9 @@ class SgkApp:
         self._hotkeys: SgkHotkeyManager | None = None
         self._pipeline: SgkDictationPipeline | None = None
         self._uinput: SgkUinputInjector | None = None
+        self._cues: SgkSoundCues | None = None
         self._tray: Any = None
+        self._overlay: Any = None
         self._qt_app: Any = None
         self._stopped = False
 
@@ -68,6 +71,12 @@ class SgkApp:
 
         behavior = self._cfg.get("behavior", {})
         audio = self._cfg.get("audio", {})
+        feedback = self._cfg.get("feedback", {})
+
+        self._cues = SgkSoundCues(
+            enabled=feedback.get("sound_enabled", True),
+            volume=feedback.get("sound_volume", 0.25),
+        )
 
         from sgk_voice_typer.asr.transcriber import SgkTranscriber
 
@@ -103,6 +112,7 @@ class SgkApp:
             self._executor,
             max_duration_s=behavior.get("max_duration_s", 60.0),
         )
+        self._pipeline.sgk_set_state_listener(self._sgk_on_state)
 
         self._loop_thread = threading.Thread(
             target=self._loop.run_forever, name="sgk-asyncio", daemon=True
@@ -161,11 +171,12 @@ class SgkApp:
             self._executor.shutdown(wait=True, cancel_futures=True)
         if self._uinput is not None:
             self._uinput.sgk_close()
-        if self._tray is not None:
-            try:
-                self._tray.sgk_destroy()
-            except Exception:
-                pass
+        for gui_obj in (self._overlay, self._tray):
+            if gui_obj is not None:
+                try:
+                    gui_obj.sgk_destroy()
+                except Exception:
+                    pass
         if self._qt_app is not None:
             try:
                 self._qt_app.quit()
@@ -205,6 +216,7 @@ class SgkApp:
         try:
             from PyQt6.QtWidgets import QApplication
 
+            from sgk_voice_typer.gui.overlay import SgkListeningOverlay
             from sgk_voice_typer.gui.tray import SgkTrayIcon
         except ImportError as exc:
             _logger.warning("sgk_gui_unavailable", extra={"error": str(exc)})
@@ -223,10 +235,30 @@ class SgkApp:
             icon_style=ui_cfg.get("tray_icon_style", "color"),
         )
         self._tray.sgk_create()
-        if self._pipeline is not None:
-            self._pipeline.sgk_set_state_listener(self._tray.sgk_set_state)
+
+        if self._cfg.get("feedback", {}).get("overlay_enabled", True) and self._pipeline is not None:
+            self._overlay = SgkListeningOverlay(
+                level_getter=self._pipeline.sgk_current_level,
+                position=self._cfg.get("feedback", {}).get("overlay_position", "bottom-center"),
+            )
+            self._overlay.sgk_create()
+
         _logger.info("sgk_gui_started")
         return True
+
+    def _sgk_on_state(self, state: str) -> None:
+        """Pipeline state fan-out. Called from the asyncio thread - the sink
+        objects only store flags / play sound, never touch Qt directly."""
+        if state == "recording":
+            if self._cues is not None:
+                self._cues.play_start()
+        elif state == "processing":
+            if self._cues is not None:
+                self._cues.play_stop()
+        if self._tray is not None:
+            self._tray.sgk_set_state(state)
+        if self._overlay is not None:
+            self._overlay.sgk_set_listening(state == "recording")
 
     def _sgk_open_settings(self) -> None:
         try:
@@ -260,6 +292,13 @@ class SgkApp:
                 restore_clipboard=bool(beh.get("restore_clipboard", True)),
             )
             self._pipeline.sgk_set_max_duration(beh.get("max_duration_s", 60.0))
+
+        fb = new_cfg.get("feedback", {})
+        if self._cues is not None:
+            self._cues.sgk_set(
+                enabled=fb.get("sound_enabled", True),
+                volume=fb.get("sound_volume", 0.25),
+            )
 
         # Microphone / min-duration can be swapped live.
         new_audio = new_cfg.get("audio", {})

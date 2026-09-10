@@ -54,6 +54,12 @@ class TestDefaults:
         assert data["logging"]["format"] == "json"
         assert data["logging"]["file"].endswith("voice_typer.log")
 
+    def test_default_feedback(self, config: SgkConfig) -> None:
+        data = config.sgk_load()
+        assert data["feedback"]["sound_enabled"] is True
+        assert 0.0 <= data["feedback"]["sound_volume"] <= 1.0
+        assert data["feedback"]["overlay_enabled"] is True
+
 
 class TestLoadSave:
     def test_creates_file_on_first_load(self, config: SgkConfig, config_path: Path) -> None:

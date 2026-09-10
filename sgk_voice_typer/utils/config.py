@@ -45,9 +45,15 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
         "min_duration_s": 0.3,        # shorter clips are dropped (stray key taps)
         "max_duration_s": 60.0,       # hard cap against a stuck key
         "no_speech_threshold": 0.5,   # skip typing if Whisper is this unsure speech occurred
-        "clipboard_settle_ms": 80,
-        "paste_settle_ms": 80,
+        "clipboard_settle_ms": 150,
+        "paste_settle_ms": 400,
         "restore_clipboard": True,
+    },
+    "feedback": {
+        "sound_enabled": True,
+        "sound_volume": 0.25,         # 0.0 - 1.0
+        "overlay_enabled": True,
+        "overlay_position": "bottom-center",   # currently the only value
     },
     "logging": {
         "level": "INFO",

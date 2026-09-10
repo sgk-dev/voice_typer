@@ -36,10 +36,16 @@ class SgkRecorder:
         self._chunks: list[np.ndarray] = []
         self._stream = None
         self._t0 = 0.0
+        self._level = 0.0   # smoothed RMS of the last chunk, 0..~1 (for the overlay)
 
     @property
     def is_recording(self) -> bool:
         return self._stream is not None
+
+    @property
+    def level(self) -> float:
+        """Latest smoothed input level (RMS), 0.0 when not recording."""
+        return self._level if self._stream is not None else 0.0
 
     def elapsed_s(self) -> float:
         return time.monotonic() - self._t0 if self._stream is not None else 0.0
@@ -52,12 +58,16 @@ class SgkRecorder:
 
         with self._lock:
             self._chunks = []
+        self._level = 0.0
 
         def _callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
             if status:
                 _logger.debug("sgk_audio_status", extra={"status": str(status)})
             with self._lock:
                 self._chunks.append(indata.copy())
+            rms = float(np.sqrt(np.mean(np.square(indata, dtype="float64")))) if frames else 0.0
+            # Exponential smoothing so the equaliser bars don't jitter.
+            self._level = 0.6 * self._level + 0.4 * rms
 
         try:
             stream = sd.InputStream(
@@ -81,6 +91,7 @@ class SgkRecorder:
     def stop(self) -> np.ndarray | None:
         """Close the stream and return the waveform, or None if too short/empty."""
         stream, self._stream = self._stream, None
+        self._level = 0.0
         if stream is None:
             return None
         try:
