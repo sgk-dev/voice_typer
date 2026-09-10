@@ -43,7 +43,7 @@ class SgkTranscriber:
 
         _logger.info(
             "sgk_model_loading",
-            extra={"name": name, "device": device, "compute_type": compute_type},
+            extra={"model": name, "device": device, "compute_type": compute_type},
         )
         t0 = time.monotonic()
         self._model = WhisperModel(name, device=device, compute_type=compute_type)

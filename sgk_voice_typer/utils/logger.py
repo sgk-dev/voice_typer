@@ -2,7 +2,12 @@
 
 Usage:
     _logger = sgk_get_logger(__name__)
-    _logger.info("sgk_convert", extra={"process": "firefox", "layout_before": "en", ...})
+    _logger.info("sgk_transcribe", extra={"chars": 42, "lang": "ru", "infer_s": 0.4})
+
+Keys in ``extra=`` must not clash with reserved ``LogRecord`` attributes
+(``name``, ``module``, ``process``, ``msg``, ``args``, ...): the stdlib raises
+``KeyError`` and it kills the calling thread. ``tests/unit/test_logger.py``
+scans the source to enforce this.
 
 Log record format (JSON):
     {timestamp, level, logger, event, **extra_fields}

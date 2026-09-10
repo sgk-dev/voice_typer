@@ -1,8 +1,8 @@
 """Dictation pipeline: press -> record, release -> transcribe -> type.
 
-Runs on the asyncio loop. Blocking work is pushed to executors: the mic
-start/stop to the default executor, the GPU transcription to a dedicated
-single-worker executor so two phrases can never race for VRAM.
+Runs on the asyncio loop. Opening / closing the mic stream is fast (~10 ms) and
+happens inline; only the GPU transcription is pushed to a dedicated
+single-worker executor, so two phrases can never race for VRAM.
 
 A re-entrancy guard (``_active`` / ``_processing``) means a second press while
 a recording or a transcription is in flight is ignored. The hard duration cap
@@ -67,7 +67,7 @@ class SgkDictationPipeline:
             return
         self._active = True
         self._terminal = terminal
-        ok = await self._loop.run_in_executor(None, self._recorder.start)
+        ok = self._recorder.start()
         if not ok:
             self._active = False
             self._emit(SGK_IDLE)
@@ -97,7 +97,7 @@ class SgkDictationPipeline:
             self._watchdog = None
         self._emit(SGK_PROCESSING)
         try:
-            audio = await self._loop.run_in_executor(None, self._recorder.stop)
+            audio = self._recorder.stop()
             if audio is None:
                 return
             text = await self._loop.run_in_executor(

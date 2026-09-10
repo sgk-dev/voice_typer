@@ -14,6 +14,31 @@ def test_get_logger_is_under_package_hierarchy() -> None:
     assert log.name == "sgk_voice_typer.something"
 
 
+def test_no_source_uses_reserved_logrecord_keys_in_extra() -> None:
+    """extra={"name": ...} & friends raise KeyError and kill the calling thread."""
+    import pathlib
+    import re
+
+    import sgk_voice_typer
+
+    reserved = (
+        "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+        "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+        "created", "msecs", "relativeCreated", "thread", "threadName",
+        "processName", "process", "message", "taskName",
+    )
+    pkg_dir = pathlib.Path(sgk_voice_typer.__file__).parent
+    offenders: list[str] = []
+    for py in pkg_dir.rglob("*.py"):
+        text = py.read_text(encoding="utf-8")
+        for m in re.finditer(r"extra=\{([^}]*)\}", text, re.DOTALL):
+            keys = set(re.findall(r"""["']([A-Za-z_]+)["']\s*:""", m.group(1)))
+            bad = keys & set(reserved)
+            if bad:
+                offenders.append(f"{py.name}: {sorted(bad)}")
+    assert not offenders, offenders
+
+
 def test_file_output_is_single_line_json(tmp_path: Path) -> None:
     log_file = tmp_path / "vt.log"
     sgk_configure_logging(level="INFO", log_file=str(log_file))
