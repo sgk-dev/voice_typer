@@ -1,17 +1,72 @@
-[project]
-name = "voice-typer"
-version = "0.1.0"
-description = "Push-to-talk voice input daemon for Linux/Wayland"
-requires-python = ">=3.12"
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "sgk-voice-typer"
+version = "0.2.0"
+description = "Push-to-talk voice input daemon for Linux / GNOME Wayland"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [{name = "SGK", email = "sidash.seo@gmail.com"}]
+requires-python = ">=3.12"
+keywords = ["voice", "speech", "dictation", "whisper", "linux", "wayland", "input"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Utilities",
+]
 dependencies = [
-    "faster-whisper",
-    "sounddevice",
-    "evdev",
-    "pystray",
-    "Pillow",
-    "dbus-python",
+    "faster-whisper>=1.0",
+    "sounddevice>=0.4",
+    "numpy>=1.24",
+    "evdev>=1.6",
+    "PyQt6>=6.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-qt>=4.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
 ]
 
 [project.scripts]
-voice-typer = "cli.voice_typer_cli:main"
+sgk-voice-typer = "sgk_voice_typer.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/sgk-dev/voice_typer"
+Repository = "https://github.com/sgk-dev/voice_typer"
+"Bug Tracker" = "https://github.com/sgk-dev/voice_typer/issues"
+
+[tool.setuptools.packages.find]
+include = ["sgk_voice_typer*"]
+
+[tool.setuptools.package-data]
+"sgk_voice_typer.gui" = ["icon.png"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
