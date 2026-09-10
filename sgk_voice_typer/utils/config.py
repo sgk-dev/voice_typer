@@ -52,9 +52,10 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
     },
     "feedback": {
         "sound_enabled": True,
-        "sound_volume": 0.25,         # 0.0 - 1.0
+        "sound_volume": 0.18,         # 0.0 - 1.0
         "overlay_enabled": True,
         "overlay_position": "bottom-center",   # currently the only value
+        "overlay_screen": "auto",     # "auto" (follow the focused window) | "primary" | "pointer"
     },
     "logging": {
         "level": "INFO",

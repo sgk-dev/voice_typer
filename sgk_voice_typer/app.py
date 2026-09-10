@@ -240,10 +240,12 @@ class SgkApp:
         )
         self._tray.sgk_create()
 
-        if self._cfg.get("feedback", {}).get("overlay_enabled", True) and self._pipeline is not None:
+        fb_cfg = self._cfg.get("feedback", {})
+        if fb_cfg.get("overlay_enabled", True) and self._pipeline is not None:
             self._overlay = SgkListeningOverlay(
                 level_getter=self._pipeline.sgk_current_level,
-                position=self._cfg.get("feedback", {}).get("overlay_position", "bottom-center"),
+                position=fb_cfg.get("overlay_position", "bottom-center"),
+                screen=fb_cfg.get("overlay_screen", "auto"),
             )
             self._overlay.sgk_create()
 

@@ -1,16 +1,21 @@
 """On-screen "listening" indicator: a rounded pill of equaliser bars.
 
 Frameless, always-on-top, click-through, translucent. Shown only while a
-recording is in progress, at the bottom-centre of whichever screen the mouse
-pointer is on. The bar heights follow the microphone RMS level, which is read
-from a getter on a 33 ms render timer - no Qt object is touched off the Qt
-thread (``sgk_set_listening`` just flips a flag, a 120 ms timer reconciles).
+recording is in progress, at the bottom-centre of a screen chosen by
+``screen`` mode: ``auto`` follows the focused window (via ``xdotool`` under
+XWayland, falling back to the primary screen), ``primary`` pins it, ``pointer``
+uses the screen under the mouse. The bar heights follow the microphone RMS
+level, read from a getter on a 33 ms render timer - no Qt object is touched off
+the Qt thread (``sgk_set_listening`` just flips a flag, a 120 ms timer
+reconciles).
 """
 
 from __future__ import annotations
 
 import math
 import random
+import shutil
+import subprocess
 from typing import Any, Callable
 
 from sgk_voice_typer.utils.logger import sgk_get_logger
@@ -26,9 +31,15 @@ _RECONCILE_MS = 120
 
 
 class SgkListeningOverlay:
-    def __init__(self, level_getter: Callable[[], float], position: str = "bottom-center") -> None:
+    def __init__(
+        self,
+        level_getter: Callable[[], float],
+        position: str = "bottom-center",
+        screen: str = "auto",
+    ) -> None:
         self._level_getter = level_getter
         self._position = position
+        self._screen_mode = screen if screen in ("auto", "primary", "pointer") else "auto"
         self._widget: Any = None
         self._render_timer: Any = None
         self._reconcile_timer: Any = None
@@ -119,9 +130,9 @@ class SgkListeningOverlay:
 
     def _place(self, w) -> None:
         try:
-            from PyQt6.QtGui import QCursor, QGuiApplication
+            from PyQt6.QtGui import QGuiApplication
 
-            screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+            screen = self._pick_screen()
             if screen is None:
                 return
             geo = screen.availableGeometry()
@@ -134,11 +145,47 @@ class SgkListeningOverlay:
                 _logger.warning(
                     "sgk_overlay_wayland_position",
                     extra={"hint": "install libxcb-cursor0 so the overlay can sit "
-                                   "bottom-centre (GNOME Wayland ignores client "
-                                   "window positions)"},
+                                   "bottom-centre of the right screen (GNOME "
+                                   "Wayland ignores client window positions)"},
                 )
         except Exception as exc:
             _logger.debug("sgk_overlay_place_failed", extra={"error": str(exc)})
+
+    def _pick_screen(self):
+        from PyQt6.QtCore import QPoint
+        from PyQt6.QtGui import QCursor, QGuiApplication
+
+        primary = QGuiApplication.primaryScreen()
+        if self._screen_mode == "primary":
+            return primary
+        if self._screen_mode == "pointer":
+            return QGuiApplication.screenAt(QCursor.pos()) or primary
+
+        # "auto": the screen holding the focused window (XWayland only).
+        centre = self._active_window_centre()
+        if centre is not None:
+            return QGuiApplication.screenAt(QPoint(*centre)) or primary
+        return primary
+
+    @staticmethod
+    def _active_window_centre() -> tuple[int, int] | None:
+        if not shutil.which("xdotool"):
+            return None
+        try:
+            out = subprocess.run(
+                ["xdotool", "getactivewindow", "getwindowgeometry", "--shell"],
+                capture_output=True, text=True, timeout=0.5,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+        vals: dict[str, int] = {}
+        for row in out.splitlines():
+            k, _, v = row.partition("=")
+            if v.strip().lstrip("-").isdigit():
+                vals[k.strip()] = int(v)
+        if {"X", "Y", "WIDTH", "HEIGHT"} <= vals.keys():
+            return vals["X"] + vals["WIDTH"] // 2, vals["Y"] + vals["HEIGHT"] // 2
+        return None
 
     def _fade_to(self, target: float, hide_after: bool = False) -> None:
         from PyQt6.QtCore import QEasingCurve, QPropertyAnimation
