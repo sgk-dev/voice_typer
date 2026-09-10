@@ -4,10 +4,10 @@
 
 # VoiceTyper
 
-**Push-to-talk voice input for Linux — hold a key, speak, release, the text appears where your cursor is.**
+**Push-to-talk voice input for Linux - hold a key, speak, release, the text appears where your cursor is.**
 
 Hold **F9**, say a sentence, let go: it is transcribed on your GPU with
-faster-whisper and pasted into whatever window has focus — editor, browser,
+faster-whisper and pasted into whatever window has focus - editor, browser,
 chat, terminal.
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
@@ -34,7 +34,7 @@ never listens otherwise.
 3. On release the clip goes to faster-whisper (`large-v3-turbo`, CUDA).
 4. The result is placed on the clipboard and pasted with a synthetic **Ctrl+V**
    (**Ctrl+Shift+V** when you use the terminal hotkey) through a `uinput`
-   virtual keyboard — `wtype` is unsupported by Mutter, so this is the reliable
+   virtual keyboard - `wtype` is unsupported by Mutter, so this is the reliable
    path.
 5. Your clipboard is saved before and restored after.
 
@@ -43,7 +43,7 @@ never listens otherwise.
 | Action | Hotkey |
 |--------|--------|
 | Record and type | hold `F9` |
-| Record and type (terminal — pastes with `Ctrl+Shift+V`) | hold `Shift+F9` |
+| Record and type (terminal - pastes with `Ctrl+Shift+V`) | hold `Shift+F9` |
 | Enable / disable the daemon | `Ctrl+Pause` |
 
 All configurable in Settings or `~/.config/sgk-voice-typer/config.json`.
@@ -54,7 +54,7 @@ The tray icon shows the state: idle, recording, transcribing, or paused.
 Right-click for the menu:
 
 - **Enabled / Paused**
-- **Settings…** — microphone, model, recognition language, hotkeys, UI
+- **Settings…** - microphone, model, recognition language, hotkeys, UI
   language, launch on login, behavior timings
 - **About**
 - **Quit**

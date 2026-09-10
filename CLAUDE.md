@@ -1,4 +1,4 @@
-# CLAUDE.md — VoiceTyper
+# CLAUDE.md - VoiceTyper
 
 Guidance for Claude Code working in this repo. Written in English; domain terms
 in Russian/Ukrainian explained in parentheses.
@@ -20,20 +20,20 @@ the focused window.
 | Path | Responsibility |
 |------|----------------|
 | `__main__.py` | argparse (`--no-gui` / `--log-level` / `--install-desktop` / `--install-service` / `--version`), single-instance guard, signal handlers |
-| `app.py` | `SgkApp` — builds and wires everything, owns the asyncio loop thread + Qt main thread, shutdown |
+| `app.py` | `SgkApp` - builds and wires everything, owns the asyncio loop thread + Qt main thread, shutdown |
 | `asr/cuda_env.py` | find the pip CUDA libs, prepend `LD_LIBRARY_PATH`, re-exec once (guarded by `SGK_VT_CUDA_REEXEC`) |
-| `asr/transcriber.py` | `SgkTranscriber` — faster-whisper wrapper, injectable model |
-| `core/recorder.py` | `SgkRecorder` — `sounddevice` capture, drops sub-`min_duration` clips |
-| `core/pipeline.py` | `SgkDictationPipeline` — press→record, release→transcribe→type; re-entrancy guard, duration cap |
-| `core/hotkey_manager.py` | `SgkHotkeyManager` — evdev thread → asyncio loop; terminal flag by hotkey name; toggle debounce; pause gating |
+| `asr/transcriber.py` | `SgkTranscriber` - faster-whisper wrapper, injectable model |
+| `core/recorder.py` | `SgkRecorder` - `sounddevice` capture, drops sub-`min_duration` clips |
+| `core/pipeline.py` | `SgkDictationPipeline` - press→record, release→transcribe→type; re-entrancy guard, duration cap |
+| `core/hotkey_manager.py` | `SgkHotkeyManager` - evdev thread → asyncio loop; terminal flag by hotkey name; toggle debounce; pause gating |
 | `input/base.py` | `SgkInputBackend` abstract, `(name, phase)` callback |
-| `input/evdev_backend.py` | `SgkEvdevHotkeyListener` — hold-mode dispatch state machine |
-| `input/uinput_backend.py` | `SgkUinputInjector` — virtual keyboard, `sgk_paste(shift=...)` |
-| `input/clipboard.py` | `SgkClipboard` — save/restore + `sgk_type` via `wl-copy` (stdin) + synthetic paste |
-| `gui/tray.py` | `SgkTrayIcon` — 4 states (idle/recording/processing/paused), QTimer reconcile, About |
-| `gui/config_dialog.py` | `SgkConfigDialog` — General/Model/Audio/Hotkeys/Behavior tabs |
-| `gui/i18n.py` | `sgk_tr` — en/ru string table, English fallback |
-| `utils/config.py` | `SgkConfig` — load/save/deep-merge |
+| `input/evdev_backend.py` | `SgkEvdevHotkeyListener` - hold-mode dispatch state machine |
+| `input/uinput_backend.py` | `SgkUinputInjector` - virtual keyboard, `sgk_paste(shift=...)` |
+| `input/clipboard.py` | `SgkClipboard` - save/restore + `sgk_type` via `wl-copy` (stdin) + synthetic paste |
+| `gui/tray.py` | `SgkTrayIcon` - 4 states (idle/recording/processing/paused), QTimer reconcile, About |
+| `gui/config_dialog.py` | `SgkConfigDialog` - General/Model/Audio/Hotkeys/Behavior tabs |
+| `gui/i18n.py` | `sgk_tr` - en/ru string table, English fallback |
+| `utils/config.py` | `SgkConfig` - load/save/deep-merge |
 | `utils/logger.py` | structured JSON logging under the `sgk_voice_typer` hierarchy |
 | `utils/single_instance.py` | flock guard |
 | `utils/autostart.py` / `utils/resources.py` | XDG autostart entry, `.desktop` + systemd unit text (generated in code) |
@@ -48,7 +48,7 @@ the focused window.
   `F9` → `Ctrl+V`, `Shift+F9` → `Ctrl+Shift+V`.
 - **CUDA libs at runtime.** The `nvidia-*-cu12` wheels install under
   `site-packages/nvidia/*/lib`, off the linker path. `cuda_env` prepends them
-  and re-execs once — never hardcode `LD_LIBRARY_PATH` in the systemd unit.
+  and re-execs once - never hardcode `LD_LIBRARY_PATH` in the systemd unit.
 - **Privacy.** INFO logs only char count / language / durations. The recognised
   text is DEBUG-only.
 - **JSON config + PyQt6.** So the settings dialog can round-trip the config.
@@ -83,7 +83,7 @@ in a terminal → text appears; the clipboard is restored; Cyrillic is intact.
 ### Conventions
 
 - Prefix `sgk_` on custom classes / methods / public functions; `sgk-` on CSS
-  (n/a here). Structured logging only — no `print()` except CLI user output in
+  (n/a here). Structured logging only - no `print()` except CLI user output in
   `__main__.py`.
 - **Never** use a reserved `LogRecord` attribute as an `extra=` key (`name`,
   `module`, `process`, `msg`, ...). `tests/unit/test_logger.py` scans for this;
@@ -102,7 +102,7 @@ in a terminal → text appears; the clipboard is restored; Cyrillic is intact.
   `release` on the trigger key-up **without** re-checking modifiers, and only
   emit `release` after a matching `press` (`active_hold` per keycode).
 - `wl-copy` gets text on **stdin**, never argv (leading `-`). The clipboard is
-  restored only when the save actually succeeded — a failed read must not clear it.
+  restored only when the save actually succeeded - a failed read must not clear it.
 - First run downloads `large-v3-turbo` (~1.6 GB) to the HF cache.
 - Qt objects are only ever touched on the Qt thread; the tray takes state from
   other threads as plain values and a 250 ms `QTimer` reconciles.
