@@ -1,0 +1,8 @@
+sgk-voice-typer (0.2.0) unstable; urgency=low
+
+  * Rewrite to the wordwrap architecture: PyQt6 tray, JSON config, structured
+    logging, single-instance guard, self-install.
+  * Wayland text injection via uinput (replaces wtype).
+  * Second hotkey for terminals (Shift+F9) instead of window detection.
+
+ -- SGK <sidash.seo@gmail.com>  Wed, 10 Sep 2026 12:00:00 +0300

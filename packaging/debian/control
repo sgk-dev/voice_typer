@@ -1,0 +1,17 @@
+Source: sgk-voice-typer
+Section: sound
+Priority: optional
+Maintainer: SGK <sidash.seo@gmail.com>
+Build-Depends: debhelper-compat (= 13), python3-all, python3-setuptools
+Standards-Version: 4.6.2
+Homepage: https://github.com/sgk-dev/voice_typer
+
+Package: sgk-voice-typer
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, wl-clipboard, python3-pyqt6, python3-evdev, libportaudio2
+Recommends: nvidia-cuda-toolkit
+Description: Push-to-talk voice input daemon for Linux / GNOME Wayland
+ VoiceTyper transcribes speech to text with faster-whisper on the GPU and
+ types the result into the focused window. Hold a key, speak, release: the
+ text appears where the cursor is. Wayland-only, using evdev for the
+ push-to-talk key and a uinput virtual keyboard for the paste.

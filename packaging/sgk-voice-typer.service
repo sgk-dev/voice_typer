@@ -1,0 +1,22 @@
+[Unit]
+Description=VoiceTyper - push-to-talk speech daemon
+Documentation=https://github.com/sgk-dev/voice_typer
+After=graphical-session.target
+PartOf=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/sgk-voice-typer
+Restart=on-failure
+RestartSec=3s
+# Session environment. install.sh also runs `systemctl --user import-environment`
+# so WAYLAND_DISPLAY / DBUS_SESSION_BUS_ADDRESS are populated for the unit.
+# CUDA libraries are resolved at runtime by sgk_voice_typer.asr.cuda_env - never
+# hardcode LD_LIBRARY_PATH here.
+Environment=PYTHONUNBUFFERED=1
+PassEnvironment=WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS
+
+[Install]
+WantedBy=graphical-session.target

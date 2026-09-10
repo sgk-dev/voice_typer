@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=VoiceTyper
+GenericName=Voice Input
+Comment=Push-to-talk speech-to-text that types into the focused window
+Exec=sgk-voice-typer
+Icon=voice-typer
+Categories=Utility;AudioVideo;Accessibility;
+Keywords=voice;speech;dictation;transcribe;whisper;microphone;
+Terminal=false
+NoDisplay=false
+StartupNotify=false

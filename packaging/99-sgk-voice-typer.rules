@@ -1,0 +1,14 @@
+# udev rules for sgk-voice-typer (Wayland evdev + uinput backend)
+#
+# Lets members of the 'input' group read keyboard event devices (the
+# push-to-talk listener) and create a virtual keyboard via uinput (the paste
+# injector).
+#
+# Install:
+#   sudo cp packaging/99-sgk-voice-typer.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   sudo usermod -aG input $USER
+#   # log out and back in for the group change to take effect
+
+SUBSYSTEM=="input", GROUP="input", MODE="0660"
+KERNEL=="uinput", GROUP="input", MODE="0660"

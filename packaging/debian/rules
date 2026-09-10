@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/sgk-voice-typer/usr/lib/systemd/user
+	cp packaging/sgk-voice-typer.service debian/sgk-voice-typer/usr/lib/systemd/user/
+	mkdir -p debian/sgk-voice-typer/usr/share/applications
+	cp packaging/voice-typer.desktop debian/sgk-voice-typer/usr/share/applications/
+	mkdir -p debian/sgk-voice-typer/lib/udev/rules.d
+	cp packaging/99-sgk-voice-typer.rules debian/sgk-voice-typer/lib/udev/rules.d/
