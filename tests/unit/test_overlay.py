@@ -60,6 +60,19 @@ def test_lock_flag_and_paint_do_not_raise(qapp) -> None:
     ov.sgk_destroy()
 
 
+def test_hue_phase_advances_each_render_tick(qapp) -> None:
+    ov = _overlay(lambda: 0.03)
+    ov.sgk_create()
+    assert ov._hue_phase == 0.0
+    ov._render_tick()
+    after_one = ov._hue_phase
+    assert after_one > 0.0
+    for _ in range(5):
+        ov._render_tick()
+    assert ov._hue_phase > after_one  # keeps advancing - a continuous shimmer
+    ov.sgk_destroy()
+
+
 def test_preview_widget_is_wider_and_taller(qapp) -> None:
     narrow = _overlay(preview=False)
     wide = _overlay(preview=True)

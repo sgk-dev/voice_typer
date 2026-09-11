@@ -41,6 +41,14 @@ _LEVEL_GAIN = 9.0          # RMS (~0.03 speech) -> 0..1 bar fill
 _RENDER_MS = 33
 _RECONCILE_MS = 120
 
+# Equaliser bar colour: a slow, continuous hue shimmer rather than a flat
+# fill. Hue drifts within a blue/cyan/violet band so it stays pleasant
+# instead of cycling through the full rainbow.
+_HUE_BASE = 0.58
+_HUE_AMPLITUDE = 0.14
+_HUE_SPATIAL = 0.35        # hue offset between adjacent bars (radians)
+_HUE_SPEED = 0.045         # radians of phase per render tick
+
 
 def _preview_band_h(lines: int) -> int:
     lines = max(_PREVIEW_MIN_LINES, min(_PREVIEW_MAX_LINES, lines))
@@ -73,6 +81,7 @@ class SgkListeningOverlay:
         self._preview_text = ""
         self._bars = [0.0] * _BARS
         self._phase = [random.uniform(0, math.tau) for _ in range(_BARS)]
+        self._hue_phase = 0.0
 
     # ------------------------------------------------------------------
     # any thread
@@ -250,6 +259,7 @@ class SgkListeningOverlay:
             wobble = 0.12 + 0.10 * math.sin(self._phase[i])
             target = 0.06 + fill * (0.35 + 0.65 * centre) + fill * wobble
             self._bars[i] += (min(1.0, target) - self._bars[i]) * 0.4
+        self._hue_phase += _HUE_SPEED
         if self._preview_enabled:
             self._grow_to_fit_preview()
         if self._widget is not None:
@@ -318,17 +328,18 @@ class SgkListeningOverlay:
                 p.drawText(band, flags, "…")
             p.setPen(Qt.PenStyle.NoPen)
 
-        # --- equaliser ---
-        pad_x, pad_y = 22, 12
+        # --- equaliser (narrower than the pill, hue shimmering while it plays) ---
+        pad_x, pad_y = 34, 12
         lock_w = 24 if self._locked else 0
         area_w = wpx - 2 * pad_x - lock_w
         area_h = _BARS_H - 2 * pad_y
         bar_w = area_w / (_BARS * 2 - 1)
-        p.setBrush(QColor(90, 170, 255, 235))
         for i, v in enumerate(self._bars):
             bh = max(3.0, v * area_h)
             x = pad_x + i * 2 * bar_w
             y = bars_top + pad_y + (area_h - bh) / 2
+            hue = (_HUE_BASE + _HUE_AMPLITUDE * math.sin(self._hue_phase + i * _HUE_SPATIAL)) % 1.0
+            p.setBrush(QColor.fromHslF(hue, 0.75, 0.62, 0.92))
             p.drawRoundedRect(QRectF(x, y, bar_w, bh), bar_w / 2, bar_w / 2)
 
         if self._locked:

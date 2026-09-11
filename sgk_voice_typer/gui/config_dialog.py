@@ -28,6 +28,18 @@ _COMPUTE_TYPES = ["float16", "int8_float16", "int8", "float32"]
 _REC_LANGS = ["auto", "ru", "en", "uk", "de", "fr", "es", "pl", "it"]
 
 
+# Generic ALSA plumbing PortAudio exposes as if it were a real microphone -
+# some of these route to nothing (or to the wrong card) depending on the
+# system's /etc/asound.conf and are a common cause of silent recordings.
+# "System default" (device=None) already goes through PortAudio's own
+# default, which follows PulseAudio/PipeWire correctly - so these bring
+# nothing a real device name doesn't, and just invite a bad pick.
+_SGK_ALSA_NOISE = {
+    "sysdefault", "default", "pulse", "pipewire", "dmix", "lavrate",
+    "samplerate", "speexrate", "speex", "upmix", "vdownmix", "null",
+}
+
+
 def _sgk_input_devices() -> list[tuple[str, object]]:
     """(label, value) pairs; value None means system default."""
     devices: list[tuple[str, object]] = [(sgk_tr("cfg.audio.default"), None)]
@@ -35,8 +47,9 @@ def _sgk_input_devices() -> list[tuple[str, object]]:
         import sounddevice as sd
 
         for idx, dev in enumerate(sd.query_devices()):
-            if dev.get("max_input_channels", 0) > 0:
-                devices.append((f"{dev['name']}", dev["name"]))
+            name = dev.get("name", "")
+            if dev.get("max_input_channels", 0) > 0 and name not in _SGK_ALSA_NOISE:
+                devices.append((name, name))
     except Exception as exc:  # no PortAudio, no devices - just offer the default
         _logger.debug("sgk_audio_enumerate_failed", extra={"error": str(exc)})
     return devices

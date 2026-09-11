@@ -8,7 +8,7 @@ pytest.importorskip("PyQt6.QtWidgets")
 
 from PyQt6.QtWidgets import QApplication, QDialog  # noqa: E402
 
-from sgk_voice_typer.gui.config_dialog import SgkConfigDialog  # noqa: E402
+from sgk_voice_typer.gui.config_dialog import SgkConfigDialog, _sgk_input_devices  # noqa: E402
 from sgk_voice_typer.utils.config import SgkConfig  # noqa: E402
 
 
@@ -130,3 +130,23 @@ def test_sound_style_roundtrips_and_lists_all_presets(qapp) -> None:
 
     d._w["sound_style"].setCurrentIndex(0)
     assert d._sgk_collect()["feedback"]["sound_style"] == list(SGK_SOUND_STYLES)[0]
+
+
+def test_input_devices_skip_generic_alsa_plumbing(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeSd:
+        @staticmethod
+        def query_devices():
+            return [
+                {"name": "sysdefault", "max_input_channels": 128},
+                {"name": "pulse", "max_input_channels": 32},
+                {"name": "2.4G Wireless headset: USB Audio (hw:3,0)", "max_input_channels": 1},
+            ]
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "sounddevice", _FakeSd())
+    devices = _sgk_input_devices()
+    names = [v for _label, v in devices]
+    assert "sysdefault" not in names
+    assert "pulse" not in names
+    assert "2.4G Wireless headset: USB Audio (hw:3,0)" in names
