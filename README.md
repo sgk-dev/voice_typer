@@ -18,11 +18,19 @@ chat, terminal.
 
 ---
 
+<!--
+Demo GIF: hold F9, the on-screen equaliser pill lights up and shimmers while
+you speak, release, and the text lands where the cursor is. Record with
+wf-recorder/Peek and drop it here as demo.gif.
+-->
+
 ## Why
 
 Dictation tools for Linux are either cloud-bound or fiddly. VoiceTyper runs
-entirely on your machine: the model is loaded once into VRAM and stays there,
-so a five-second phrase comes back in well under a second on an RTX 3060.
+entirely on your machine: with an NVIDIA GPU the model stays loaded in VRAM
+and a five-second phrase comes back in well under a second on an RTX 3060.
+No GPU? Set `model.device` to `cpu` in Settings and it still works, just
+slower per phrase.
 
 It is **push-to-talk on purpose**: it records only while you hold the key and
 never listens otherwise.
@@ -67,9 +75,10 @@ bash packaging/install.sh
 systemctl --user start sgk-voice-typer
 ```
 
-Requires: an NVIDIA GPU with CUDA, `wl-clipboard`, `python3-pyqt6`,
-`python3-evdev`, and membership in the `input` group (for the evdev listener and
-the `uinput` virtual keyboard).
+Requires `wl-clipboard`, `python3-pyqt6`, `python3-evdev`, and membership in
+the `input` group (for the evdev listener and the `uinput` virtual keyboard).
+An NVIDIA GPU with CUDA gives sub-second transcription; without one, set
+`model.device` to `cpu` in Settings - it still works, just slower per phrase.
 
 On the first run the model (`large-v3-turbo`, ~1.6 GB) is downloaded to the
 Hugging Face cache.
