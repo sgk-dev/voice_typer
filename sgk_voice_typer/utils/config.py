@@ -53,6 +53,7 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
     "feedback": {
         "sound_enabled": True,
         "sound_volume": 0.18,         # 0.0 - 1.0
+        "sound_style": "classic",     # see feedback/cues.py::SGK_SOUND_STYLES
         "overlay_enabled": True,
         "overlay_position": "bottom-center",   # currently the only value
         "overlay_screen": "auto",     # "auto" (follow the focused window) | "primary" | "pointer"

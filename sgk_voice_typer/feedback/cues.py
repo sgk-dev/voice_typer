@@ -21,8 +21,18 @@ _GAP_S = 0.028
 _ATTACK_S = 0.018
 _DECAY = 5.5            # exponential decay rate over the note
 
-# Soft, consonant intervals (C5 and G5).
-_LOW, _HIGH = 523.25, 783.99
+# Selectable start/stop note pairs (low -> high on start, reversed on stop).
+# All consonant intervals so none of them sounds jarring.
+_PRESETS: dict[str, tuple[float, float]] = {
+    "classic": (523.25, 783.99),   # C5 -> G5
+    "soft": (440.00, 659.25),      # A4 -> E5
+    "bright": (587.33, 880.00),    # D5 -> A5
+    "deep": (392.00, 587.33),      # G4 -> D5
+    "crystal": (659.25, 987.77),   # E5 -> B5
+    "warm": (349.23, 523.25),      # F4 -> C5
+}
+SGK_SOUND_STYLES: tuple[str, ...] = tuple(_PRESETS)
+_DEFAULT_STYLE = "classic"
 
 
 def _note(freq: float) -> np.ndarray:
@@ -49,23 +59,33 @@ def _chime(a: float, b: float) -> np.ndarray:
 
 
 class SgkSoundCues:
-    def __init__(self, enabled: bool = True, volume: float = 0.18) -> None:
+    def __init__(
+        self, enabled: bool = True, volume: float = 0.18, style: str = _DEFAULT_STYLE
+    ) -> None:
         self._enabled = enabled
         self._volume = max(0.0, min(1.0, volume))
+        self._style = style if style in _PRESETS else _DEFAULT_STYLE
         self._rebuild()
 
     def _rebuild(self) -> None:
-        self._start = _chime(_LOW, _HIGH) * self._volume
-        self._stop = _chime(_HIGH, _LOW) * self._volume
+        low, high = _PRESETS[self._style]
+        self._start = _chime(low, high) * self._volume
+        self._stop = _chime(high, low) * self._volume
 
-    def sgk_set(self, enabled: bool, volume: float) -> None:
+    def sgk_set(self, enabled: bool, volume: float, style: str | None = None) -> None:
         self._enabled = enabled
         self._volume = max(0.0, min(1.0, volume))
+        if style is not None and style in _PRESETS:
+            self._style = style
         self._rebuild()
 
     @property
     def sgk_enabled(self) -> bool:
         return self._enabled
+
+    @property
+    def sgk_style(self) -> str:
+        return self._style
 
     def play_start(self) -> None:
         self._play(self._start)

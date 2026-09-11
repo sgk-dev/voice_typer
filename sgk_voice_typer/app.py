@@ -77,6 +77,7 @@ class SgkApp:
         self._cues = SgkSoundCues(
             enabled=feedback.get("sound_enabled", True),
             volume=feedback.get("sound_volume", 0.25),
+            style=feedback.get("sound_style", "classic"),
         )
 
         from sgk_voice_typer.asr.transcriber import SgkTranscriber
@@ -354,6 +355,7 @@ class SgkApp:
             self._cues.sgk_set(
                 enabled=fb.get("sound_enabled", True),
                 volume=fb.get("sound_volume", 0.18),
+                style=fb.get("sound_style", "classic"),
             )
         if self._pipeline is not None:
             self._pipeline.sgk_set_preview_interval(

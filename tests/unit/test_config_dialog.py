@@ -112,5 +112,21 @@ def test_sound_preview_plays_regardless_of_checkbox(qapp, monkeypatch: pytest.Mo
     d._sgk_build(dlg)
 
     d._w["sound_on"].setChecked(False)  # preview must not depend on this
-    d._sgk_play_preview(0.1)
+    d._sgk_play_preview(0.1, "bright")
     assert "start" in calls
+
+
+def test_sound_style_roundtrips_and_lists_all_presets(qapp) -> None:
+    from sgk_voice_typer.feedback.cues import SGK_SOUND_STYLES
+
+    cfg = SgkConfig.sgk_get_default()
+    cfg["feedback"]["sound_style"] = "deep"
+    d = SgkConfigDialog(cfg, on_save=lambda _c: None)
+    dlg = QDialog()
+    d._sgk_build(dlg)
+
+    assert d._w["sound_style"].count() == len(SGK_SOUND_STYLES)
+    assert d._w["sound_style"].currentData() == "deep"
+
+    d._w["sound_style"].setCurrentIndex(0)
+    assert d._sgk_collect()["feedback"]["sound_style"] == list(SGK_SOUND_STYLES)[0]

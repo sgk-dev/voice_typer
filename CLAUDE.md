@@ -31,7 +31,7 @@ the focused window.
 | `input/uinput_backend.py` | `SgkUinputInjector` - virtual keyboard, `sgk_paste(shift=...)` |
 | `input/clipboard.py` | `SgkClipboard` - save/restore + `sgk_type` via `wl-copy` (stdin) + synthetic paste |
 | `gui/tray.py` | `SgkTrayIcon` - 4 states (idle/recording/processing/paused), QTimer reconcile, About |
-| `gui/config_dialog.py` | `SgkConfigDialog` - General/Model/Audio/Hotkeys/Behavior tabs |
+| `gui/config_dialog.py` | `SgkConfigDialog` - General/Model/Microphone/Hotkeys/Behavior tabs |
 | `gui/i18n.py` | `sgk_tr` - en/ru string table, English fallback |
 | `utils/config.py` | `SgkConfig` - load/save/deep-merge |
 | `utils/logger.py` | structured JSON logging under the `sgk_voice_typer` hierarchy |

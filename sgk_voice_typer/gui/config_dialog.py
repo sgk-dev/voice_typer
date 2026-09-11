@@ -1,8 +1,8 @@
 """Settings dialog for VoiceTyper.
 
-Tabbed PyQt6 QDialog: General / Model / Audio / Hotkeys / Behavior. On OK it
-hands a full config dict to ``on_save``; language / tray-icon changes also go to
-``on_ui_changed`` so the running tray updates immediately.
+Tabbed PyQt6 QDialog: General / Model / Microphone / Hotkeys / Behavior. On OK
+it hands a full config dict to ``on_save``; language / tray-icon changes also
+go to ``on_ui_changed`` so the running tray updates immediately.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
+from sgk_voice_typer.feedback.cues import SGK_SOUND_STYLES
 from sgk_voice_typer.gui.i18n import (
     SGK_LANGUAGE_NAMES,
     SGK_LANGUAGES,
@@ -209,13 +210,21 @@ class SgkConfigDialog:
         settle.setValue(int(beh.get("clipboard_settle_ms", 80)))
         sound_on = QCheckBox()
         sound_on.setChecked(bool(fb.get("sound_enabled", True)))
+        style_combo = QComboBox()
+        for key in SGK_SOUND_STYLES:
+            style_combo.addItem(self._tr(f"cfg.sound.{key}"), key)
+        cur_style = fb.get("sound_style", "classic")
+        if cur_style in SGK_SOUND_STYLES:
+            style_combo.setCurrentIndex(list(SGK_SOUND_STYLES).index(cur_style))
         sound_test = QPushButton(self._tr("cfg.beh.sound_test"))
-        sound_test.clicked.connect(lambda: self._sgk_play_preview(fb.get("sound_volume", 0.18)))
+        sound_test.clicked.connect(
+            lambda: self._sgk_play_preview(fb.get("sound_volume", 0.18), style_combo.currentData())
+        )
         sound_row = QHBoxLayout()
         sound_row.setContentsMargins(0, 0, 0, 0)
         sound_row.addWidget(sound_on)
+        sound_row.addWidget(style_combo, 1)
         sound_row.addWidget(sound_test)
-        sound_row.addStretch(1)
         sound_box = QWidget()
         sound_box.setLayout(sound_row)
         bf.addRow(self._tr("cfg.beh.min_dur"), min_s)
@@ -229,7 +238,8 @@ class SgkConfigDialog:
         tabs.addTab(b, self._tr("cfg.tab.behavior"))
         self._w.update(
             min_s=min_s, max_s=max_s, lock_on=lock_on, lock_s=lock_s,
-            nsp=nsp, restore=restore, settle=settle, sound_on=sound_on,
+            nsp=nsp, restore=restore, settle=settle,
+            sound_on=sound_on, sound_style=style_combo,
         )
 
         buttons = QDialogButtonBox(
@@ -247,14 +257,14 @@ class SgkConfigDialog:
 
     # ------------------------------------------------------------------
 
-    def _sgk_play_preview(self, volume: float) -> None:
-        """Play the start/stop chime pair regardless of the enabled checkbox,
-        so the user can hear it before saving."""
+    def _sgk_play_preview(self, volume: float, style: str) -> None:
+        """Play the chosen start/stop chime pair regardless of the enabled
+        checkbox, so the user can audition a style before saving."""
         from PyQt6.QtCore import QTimer
 
         from sgk_voice_typer.feedback.cues import SgkSoundCues
 
-        cues = SgkSoundCues(enabled=True, volume=volume)
+        cues = SgkSoundCues(enabled=True, volume=volume, style=style)
         cues.play_start()
         QTimer.singleShot(300, cues.play_stop)
 
@@ -287,7 +297,10 @@ class SgkConfigDialog:
             clipboard_settle_ms=settle,
             paste_settle_ms=settle,
         )
-        new.setdefault("feedback", {})["sound_enabled"] = w["sound_on"].isChecked()
+        new.setdefault("feedback", {}).update(
+            sound_enabled=w["sound_on"].isChecked(),
+            sound_style=w["sound_style"].currentData(),
+        )
         return new
 
     def _sgk_apply(self) -> None:
