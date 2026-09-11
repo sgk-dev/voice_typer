@@ -71,6 +71,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cfg.beh.lock_on": {"en": "Hands-free lock:", "ru": "Режим фиксации (hands-free):"},
     "cfg.beh.lock_after": {"en": "Lock after holding (s):", "ru": "Фиксировать после удержания (с):"},
     "cfg.beh.sound": {"en": "Start / stop sound:", "ru": "Звук начала / конца записи:"},
+    "cfg.beh.sound_test": {"en": "▶ Test", "ru": "▶ Прослушать"},
     "cfg.beh.no_speech": {"en": "Silence threshold (0-1):", "ru": "Порог тишины (0-1):"},
     "cfg.beh.restore": {"en": "Restore clipboard after typing:", "ru": "Восстанавливать буфер после ввода:"},
     "cfg.beh.settle": {"en": "Clipboard settle delay (ms):", "ru": "Задержка буфера обмена (мс):"},

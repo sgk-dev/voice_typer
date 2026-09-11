@@ -98,3 +98,19 @@ def test_ui_changed_fires_only_on_ui_diff(qapp) -> None:
     d._w["mono"].setChecked(True)
     d._sgk_apply()
     assert ui_calls == [("en", "mono")]
+
+
+def test_sound_preview_plays_regardless_of_checkbox(qapp, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sgk_voice_typer.feedback.cues import SgkSoundCues
+
+    calls: list = []
+    monkeypatch.setattr(SgkSoundCues, "play_start", lambda self: calls.append("start"))
+    monkeypatch.setattr(SgkSoundCues, "play_stop", lambda self: calls.append("stop"))
+
+    d = SgkConfigDialog(SgkConfig.sgk_get_default(), on_save=lambda _c: None)
+    dlg = QDialog()
+    d._sgk_build(dlg)
+
+    d._w["sound_on"].setChecked(False)  # preview must not depend on this
+    d._sgk_play_preview(0.1)
+    assert "start" in calls

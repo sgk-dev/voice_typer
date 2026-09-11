@@ -83,8 +83,10 @@ class SgkConfigDialog:
             QDialogButtonBox,
             QDoubleSpinBox,
             QFormLayout,
+            QHBoxLayout,
             QLabel,
             QLineEdit,
+            QPushButton,
             QSpinBox,
             QTabWidget,
             QVBoxLayout,
@@ -207,6 +209,15 @@ class SgkConfigDialog:
         settle.setValue(int(beh.get("clipboard_settle_ms", 80)))
         sound_on = QCheckBox()
         sound_on.setChecked(bool(fb.get("sound_enabled", True)))
+        sound_test = QPushButton(self._tr("cfg.beh.sound_test"))
+        sound_test.clicked.connect(lambda: self._sgk_play_preview(fb.get("sound_volume", 0.18)))
+        sound_row = QHBoxLayout()
+        sound_row.setContentsMargins(0, 0, 0, 0)
+        sound_row.addWidget(sound_on)
+        sound_row.addWidget(sound_test)
+        sound_row.addStretch(1)
+        sound_box = QWidget()
+        sound_box.setLayout(sound_row)
         bf.addRow(self._tr("cfg.beh.min_dur"), min_s)
         bf.addRow(self._tr("cfg.beh.max_dur"), max_s)
         bf.addRow(self._tr("cfg.beh.lock_on"), lock_on)
@@ -214,7 +225,7 @@ class SgkConfigDialog:
         bf.addRow(self._tr("cfg.beh.no_speech"), nsp)
         bf.addRow(self._tr("cfg.beh.restore"), restore)
         bf.addRow(self._tr("cfg.beh.settle"), settle)
-        bf.addRow(self._tr("cfg.beh.sound"), sound_on)
+        bf.addRow(self._tr("cfg.beh.sound"), sound_box)
         tabs.addTab(b, self._tr("cfg.tab.behavior"))
         self._w.update(
             min_s=min_s, max_s=max_s, lock_on=lock_on, lock_s=lock_s,
@@ -235,6 +246,17 @@ class SgkConfigDialog:
         root.addWidget(buttons)
 
     # ------------------------------------------------------------------
+
+    def _sgk_play_preview(self, volume: float) -> None:
+        """Play the start/stop chime pair regardless of the enabled checkbox,
+        so the user can hear it before saving."""
+        from PyQt6.QtCore import QTimer
+
+        from sgk_voice_typer.feedback.cues import SgkSoundCues
+
+        cues = SgkSoundCues(enabled=True, volume=volume)
+        cues.play_start()
+        QTimer.singleShot(300, cues.play_stop)
 
     def _sgk_collect(self) -> dict[str, Any]:
         w = self._w
