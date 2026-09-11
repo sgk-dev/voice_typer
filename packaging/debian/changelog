@@ -1,3 +1,13 @@
+sgk-voice-typer (0.3.0) unstable; urgency=low
+
+  * Hands-free lock (hold to latch recording), configurable or disabled.
+  * Live transcript preview in the on-screen overlay while speaking.
+  * Start/stop sound cues: on/off from the settings dialog and the tray
+    menu, six selectable styles with an in-dialog preview button.
+  * Settings dialog: Audio tab renamed to Microphone.
+
+ -- SGK <sidash.seo@gmail.com>  Fri, 11 Sep 2026 12:00:00 +0300
+
 sgk-voice-typer (0.2.0) unstable; urgency=low
 
   * Rewrite to the wordwrap architecture: PyQt6 tray, JSON config, structured
