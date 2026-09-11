@@ -108,6 +108,8 @@ class SgkTrayIcon:
         is_paused_getter: Callable[[], bool] | None = None,
         lang: str = "en",
         icon_style: str = "color",
+        on_sound_toggle: Callable[[], None] | None = None,
+        is_sound_enabled_getter: Callable[[], bool] | None = None,
     ) -> None:
         self._on_pause_toggle = on_pause_toggle
         self._on_open_settings = on_open_settings
@@ -115,10 +117,13 @@ class SgkTrayIcon:
         self._is_paused_getter = is_paused_getter
         self._lang = sgk_normalize_lang(lang)
         self._icon_style = icon_style if icon_style in ("color", "mono") else "color"
+        self._on_sound_toggle = on_sound_toggle
+        self._is_sound_enabled_getter = is_sound_enabled_getter
 
         self._tray: Any = None
         self._menu: Any = None
         self._pause_action: Any = None
+        self._sound_action: Any = None
         self._settings_action: Any = None
         self._about_action: Any = None
         self._quit_action: Any = None
@@ -126,7 +131,8 @@ class SgkTrayIcon:
 
         self._pipeline_state = "idle"   # set from the asyncio thread
         self._paused = False            # set from anywhere
-        self._shown_key: Any = None     # (effective_state, style, lang) last painted
+        self._sound_enabled = True      # mirrored from the getter each reconcile
+        self._shown_key: Any = None     # (effective_state, style, lang, sound) last painted
 
     # ------------------------------------------------------------------
     # public - safe to call from any thread
@@ -163,6 +169,9 @@ class SgkTrayIcon:
         self._pause_action = self._menu.addAction("")
         self._pause_action.setCheckable(True)
         self._pause_action.triggered.connect(lambda _checked: self._on_pause_toggle())
+        self._sound_action = self._menu.addAction("")
+        self._sound_action.setCheckable(True)
+        self._sound_action.triggered.connect(self._sgk_on_sound_toggled)
         self._menu.addSeparator()
         self._settings_action = self._menu.addAction("")
         self._settings_action.setIcon(_sgk_theme_icon("preferences-system"))
@@ -214,11 +223,20 @@ class SgkTrayIcon:
                 pass
         return "paused" if self._paused else self._pipeline_state
 
+    def _sgk_on_sound_toggled(self, _checked: bool) -> None:
+        if self._on_sound_toggle is not None:
+            self._on_sound_toggle()
+
     def _sgk_reconcile(self, force: bool = False) -> None:
         if self._tray is None:
             return
         state = self._effective_state()
-        key = (state, self._icon_style, self._lang)
+        if self._is_sound_enabled_getter is not None:
+            try:
+                self._sound_enabled = bool(self._is_sound_enabled_getter())
+            except Exception:
+                pass
+        key = (state, self._icon_style, self._lang, self._sound_enabled)
         if key == self._shown_key and not force:
             return
         self._shown_key = key
@@ -230,6 +248,9 @@ class SgkTrayIcon:
             self._pause_action.setText(
                 sgk_tr("tray.paused" if state == "paused" else "tray.enabled", self._lang)
             )
+            if self._sound_action is not None:
+                self._sound_action.setChecked(self._sound_enabled)
+                self._sound_action.setText(sgk_tr("tray.sound", self._lang))
             self._settings_action.setText(sgk_tr("tray.settings", self._lang))
             self._about_action.setText(sgk_tr("tray.about", self._lang))
             self._quit_action.setText(sgk_tr("tray.quit", self._lang))

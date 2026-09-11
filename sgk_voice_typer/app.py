@@ -219,6 +219,16 @@ class SgkApp:
             except Exception:
                 pass
 
+    def _sgk_toggle_sound(self) -> None:
+        if self._cues is None:
+            return
+        enabled = not self._cues.sgk_enabled
+        fb = self._cfg.setdefault("feedback", {})
+        fb["sound_enabled"] = enabled
+        self._cues.sgk_set(enabled=enabled, volume=fb.get("sound_volume", 0.18))
+        self._config.sgk_save(self._cfg)
+        _logger.info("sgk_sound_toggle", extra={"enabled": enabled})
+
     def _sgk_start_gui(self) -> bool:
         """Start the Qt tray + overlay. Returns False (fall back to headless) if
         PyQt6 is not available."""
@@ -243,6 +253,8 @@ class SgkApp:
             is_paused_getter=lambda: bool(self._hotkeys and self._hotkeys.sgk_is_paused()),
             lang=ui_cfg.get("language", "en"),
             icon_style=ui_cfg.get("tray_icon_style", "color"),
+            on_sound_toggle=self._sgk_toggle_sound,
+            is_sound_enabled_getter=lambda: bool(self._cues and self._cues.sgk_enabled),
         )
         self._tray.sgk_create()
 

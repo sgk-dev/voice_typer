@@ -63,6 +63,10 @@ class SgkSoundCues:
         self._volume = max(0.0, min(1.0, volume))
         self._rebuild()
 
+    @property
+    def sgk_enabled(self) -> bool:
+        return self._enabled
+
     def play_start(self) -> None:
         self._play(self._start)
 

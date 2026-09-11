@@ -97,6 +97,7 @@ class SgkConfigDialog:
         audio = cfg.get("audio", {})
         hotkeys = cfg.get("hotkeys", {})
         beh = cfg.get("behavior", {})
+        fb = cfg.get("feedback", {})
 
         dlg.setWindowTitle(self._tr("cfg.title"))
         dlg.setMinimumWidth(420)
@@ -204,6 +205,8 @@ class SgkConfigDialog:
         settle = QSpinBox()
         settle.setRange(0, 1000)
         settle.setValue(int(beh.get("clipboard_settle_ms", 80)))
+        sound_on = QCheckBox()
+        sound_on.setChecked(bool(fb.get("sound_enabled", True)))
         bf.addRow(self._tr("cfg.beh.min_dur"), min_s)
         bf.addRow(self._tr("cfg.beh.max_dur"), max_s)
         bf.addRow(self._tr("cfg.beh.lock_on"), lock_on)
@@ -211,10 +214,11 @@ class SgkConfigDialog:
         bf.addRow(self._tr("cfg.beh.no_speech"), nsp)
         bf.addRow(self._tr("cfg.beh.restore"), restore)
         bf.addRow(self._tr("cfg.beh.settle"), settle)
+        bf.addRow(self._tr("cfg.beh.sound"), sound_on)
         tabs.addTab(b, self._tr("cfg.tab.behavior"))
         self._w.update(
             min_s=min_s, max_s=max_s, lock_on=lock_on, lock_s=lock_s,
-            nsp=nsp, restore=restore, settle=settle,
+            nsp=nsp, restore=restore, settle=settle, sound_on=sound_on,
         )
 
         buttons = QDialogButtonBox(
@@ -261,6 +265,7 @@ class SgkConfigDialog:
             clipboard_settle_ms=settle,
             paste_settle_ms=settle,
         )
+        new.setdefault("feedback", {})["sound_enabled"] = w["sound_on"].isChecked()
         return new
 
     def _sgk_apply(self) -> None:

@@ -101,3 +101,25 @@ def test_enabled_on_start_false_starts_paused(tmp_path, monkeypatch: pytest.Monk
         app.sgk_stop()
         t.join(timeout=3)
         time.sleep(0.15)
+
+
+def test_toggle_sound_flips_cues_and_persists_config() -> None:
+    app = app_mod.SgkApp(no_gui=True)
+    t = _run_app(app)
+    try:
+        assert app._cues is not None
+        assert app._cues.sgk_enabled is True
+
+        app._sgk_toggle_sound()
+        assert app._cues.sgk_enabled is False
+        assert app._cfg["feedback"]["sound_enabled"] is False
+
+        saved = app._config.sgk_load()
+        assert saved["feedback"]["sound_enabled"] is False
+
+        app._sgk_toggle_sound()
+        assert app._cues.sgk_enabled is True
+    finally:
+        app.sgk_stop()
+        t.join(timeout=3)
+        time.sleep(0.15)
