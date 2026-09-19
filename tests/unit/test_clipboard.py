@@ -137,3 +137,32 @@ class TestType:
         c._sgk_run = _RunRecorder()  # type: ignore[method-assign]
         assert await c.sgk_type("hi") is False
         assert c._sgk_run.calls == []
+
+
+class TestKeyRelease:
+    async def test_paste_waits_until_keys_are_released(self, uinput: _FakeUinput) -> None:
+        held = {"v": True}
+        seen: list[bool] = []
+
+        def keys_held() -> bool:
+            seen.append(held["v"])
+            if len(seen) >= 3:
+                held["v"] = False
+            return held["v"]
+
+        c = SgkClipboard(uinput, clipboard_settle_ms=0, paste_settle_ms=0, keys_held=keys_held)
+        c._sgk_run = _RunRecorder()  # type: ignore[method-assign]
+        assert await c.sgk_type("hi") is True
+        assert uinput.pastes == [False]
+        assert seen[-1] is False
+
+    async def test_paste_gives_up_after_the_timeout(
+        self, uinput: _FakeUinput, monkeypatch
+    ) -> None:
+        from sgk_voice_typer.input import clipboard as mod
+
+        monkeypatch.setattr(mod, "_KEY_RELEASE_MAX_S", 0.05)
+        c = SgkClipboard(uinput, clipboard_settle_ms=0, paste_settle_ms=0, keys_held=lambda: True)
+        c._sgk_run = _RunRecorder()  # type: ignore[method-assign]
+        assert await c.sgk_type("hi") is True
+        assert uinput.pastes == [False]

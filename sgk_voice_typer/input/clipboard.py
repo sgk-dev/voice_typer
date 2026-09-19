@@ -5,6 +5,10 @@ issuing a synthetic paste (Ctrl+V, or Ctrl+Shift+V for terminals) through the
 ``uinput`` virtual keyboard. ``wtype`` is unsupported by Mutter and keycode
 typing is layout-dependent, so this is the only reliable path.
 
+Before the synthetic paste the injector waits (up to 600 ms) for the user to
+physically let go of any modifier or trigger key - a Shift still held after
+Shift+F9 would turn Ctrl+V into something else.
+
 The user's clipboard is saved before the swap and restored after. Two rules,
 learned from the previous implementation:
 
@@ -17,6 +21,8 @@ learned from the previous implementation:
 from __future__ import annotations
 
 import asyncio
+import time
+from typing import Callable
 
 from sgk_voice_typer.input.uinput_backend import SgkUinputInjector
 from sgk_voice_typer.utils.logger import sgk_get_logger
@@ -24,6 +30,8 @@ from sgk_voice_typer.utils.logger import sgk_get_logger
 _logger = sgk_get_logger(__name__)
 
 _CMD_TIMEOUT = 2.0
+_KEY_RELEASE_MAX_S = 0.6
+_KEY_RELEASE_POLL_S = 0.02
 
 
 class SgkClipboard:
@@ -35,8 +43,10 @@ class SgkClipboard:
         clipboard_settle_ms: int = 80,
         paste_settle_ms: int = 80,
         restore_clipboard: bool = True,
+        keys_held: Callable[[], bool] | None = None,
     ) -> None:
         self._uinput = uinput
+        self._keys_held = keys_held
         self._clipboard_settle = clipboard_settle_ms / 1000.0
         self._paste_settle = paste_settle_ms / 1000.0
         self._restore_enabled = restore_clipboard
@@ -117,6 +127,19 @@ class SgkClipboard:
     # inject
     # ------------------------------------------------------------------
 
+    async def _sgk_wait_keys_released(self) -> None:
+        if self._keys_held is None:
+            return
+        t0 = time.monotonic()
+        while self._keys_held() and time.monotonic() - t0 < _KEY_RELEASE_MAX_S:
+            await asyncio.sleep(_KEY_RELEASE_POLL_S)
+        waited = round((time.monotonic() - t0) * 1000)
+        if waited:
+            _logger.debug(
+                "sgk_waited_for_key_release",
+                extra={"wait_ms": waited, "still_held": bool(self._keys_held())},
+            )
+
     async def sgk_type(self, text: str, terminal: bool = False) -> bool:
         """Deliver ``text`` into the focused window via clipboard + synthetic paste.
 
@@ -137,6 +160,7 @@ class SgkClipboard:
             _logger.error("sgk_clipboard_set_failed", extra={"error": str(exc)})
             return False
         await asyncio.sleep(self._clipboard_settle)
+        await self._sgk_wait_keys_released()
         self._uinput.sgk_paste(shift=terminal)
         await asyncio.sleep(self._paste_settle)
         _logger.info(

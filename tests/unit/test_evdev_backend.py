@@ -131,3 +131,28 @@ class TestDispatchTapMode:
         lst, mods, hold = _Listener(), set(), {}
         _feed(lst, mods, hold, PAUSE, _KEY_DOWN)
         assert lst.calls == []
+
+
+class TestKeysHeld:
+    def test_reports_modifiers_and_held_triggers(self) -> None:
+        lst = _Listener()
+        assert lst.sgk_keys_held() is False
+        lst._sgk_dispatch(SHIFT, _KEY_DOWN, lst._pressed_mods, lst._active_hold, MOD_MAP, TRIGGERS)
+        assert lst.sgk_keys_held() is True
+        lst._sgk_dispatch(SHIFT, _KEY_UP, lst._pressed_mods, lst._active_hold, MOD_MAP, TRIGGERS)
+        assert lst.sgk_keys_held() is False
+        lst._sgk_dispatch(F9, _KEY_DOWN, lst._pressed_mods, lst._active_hold, MOD_MAP, TRIGGERS)
+        assert lst.sgk_keys_held() is True
+        lst._sgk_dispatch(F9, _KEY_UP, lst._pressed_mods, lst._active_hold, MOD_MAP, TRIGGERS)
+        assert lst.sgk_keys_held() is False
+
+
+class TestDeviceFilter:
+    def test_virtual_keyboards_are_skipped(self) -> None:
+        class _Dev:
+            name = "SGK VoiceTyper Virtual Keyboard"
+
+            def capabilities(self):
+                raise AssertionError("must not be queried")
+
+        assert _Listener()._sgk_is_keyboard(_Dev()) is False

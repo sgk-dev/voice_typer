@@ -24,3 +24,6 @@ class SgkInputBackend(ABC):
     @abstractmethod
     def sgk_is_available(self) -> bool:
         """Return True if this backend can operate in the current environment."""
+
+    def sgk_keys_held(self) -> bool:
+        return False

@@ -9,6 +9,12 @@ group). Two kinds of hotkey:
   letting go of Shift before F9 must still end the recording.
 * **tap** (``toggle``) - emits a single ``tap`` on key-down.
 
+Keyboards are re-scanned every few seconds and whenever a device read fails, so
+a keyboard plugged in after start (or re-enumerated after suspend) is picked up
+without a restart. ``sgk_keys_held`` reports whether any modifier or trigger key
+is physically down - the paste path waits for that to clear before sending its
+synthetic Ctrl+V.
+
 Three things the dispatch has to get right:
 
 1. keyboard auto-repeat (``key_hold`` events, value 2) is ignored for trigger
@@ -35,6 +41,11 @@ _logger = sgk_get_logger(__name__)
 
 # evdev KeyEvent.keystate values.
 _KEY_UP, _KEY_DOWN, _KEY_HOLD = 0, 1, 2
+
+# How often to look for keyboards that appeared after start (USB re-plug, resume).
+_RESCAN_S = 5.0
+# Our own uinput device (and wordwrap's) carry this in their name - never listen to them.
+_SGK_VIRTUAL_MARK = "Virtual Keyboard"
 
 _SGK_MODIFIER_KEY_NAMES: dict[str, list[str]] = {
     "ctrl":  ["KEY_LEFTCTRL", "KEY_RIGHTCTRL"],
@@ -110,6 +121,8 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
         self._thread: threading.Thread | None = None
         self._running = False
         self._stop_pipe: tuple[int, int] | None = None
+        self._pressed_mods: set[str] = set()
+        self._active_hold: dict[int, str] = {}
 
     # -- SgkInputBackend ------------------------------------------------
 
@@ -163,18 +176,24 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
 
     # -- device discovery --------------------------------------------
 
-    def _sgk_find_keyboards(self) -> list:
+    def _sgk_is_keyboard(self, dev) -> bool:
+        import evdev
+
+        if _SGK_VIRTUAL_MARK in (dev.name or ""):
+            return False
+        caps = dev.capabilities()
+        return evdev.ecodes.EV_KEY in caps and evdev.ecodes.KEY_A in caps[evdev.ecodes.EV_KEY]
+
+    def _sgk_find_keyboards(self, skip: set[str] | None = None) -> list:
         import evdev
 
         keyboards = []
         for path in sorted(glob.glob("/dev/input/event*")):
+            if skip and path in skip:
+                continue
             try:
                 dev = evdev.InputDevice(path)
-                caps = dev.capabilities()
-                if (
-                    evdev.ecodes.EV_KEY in caps
-                    and evdev.ecodes.KEY_A in caps[evdev.ecodes.EV_KEY]
-                ):
+                if self._sgk_is_keyboard(dev):
                     keyboards.append(dev)
                 else:
                     dev.close()
@@ -206,33 +225,53 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
 
     # -- event loop -------------------------------------------------
 
+    def sgk_keys_held(self) -> bool:
+        return bool(self._pressed_mods or self._active_hold)
+
+    def _sgk_drop_device(self, fds: dict[int, Any], fd: int) -> None:
+        dev = fds.pop(fd, None)
+        if dev is None:
+            return
+        _logger.info("sgk_evdev_device_lost", extra={"path": dev.path})
+        try:
+            dev.close()
+        except Exception:
+            pass
+
+    def _sgk_rescan(self, fds: dict[int, Any]) -> None:
+        known = {dev.path for dev in fds.values() if dev is not None}
+        for dev in self._sgk_find_keyboards(skip=known):
+            fds[dev.fd] = dev
+            _logger.info("sgk_evdev_device_added", extra={"path": dev.path, "device": dev.name})
+
     def _sgk_run_loop(self) -> None:
-        keyboards = []
+        fds: dict[int, Any] = {}
         try:
             import evdev
-
-            keyboards = self._sgk_find_keyboards()
-            if not keyboards:
-                _logger.error("sgk_evdev_no_keyboards")
-                return
 
             mod_code_to_name, trigger_codes = self._sgk_build_code_maps(evdev)
             if not trigger_codes:
                 _logger.error("sgk_evdev_no_valid_hotkeys")
                 return
 
-            pressed_mods: set[str] = set()
-            active_hold: dict[int, str] = {}
+            self._pressed_mods.clear()
+            self._active_hold.clear()
             stop_r = self._stop_pipe[0] if self._stop_pipe else None
-            fds: dict[int, Any] = {dev.fd: dev for dev in keyboards}
             if stop_r is not None:
                 fds[stop_r] = None
+            self._sgk_rescan(fds)
+            if len(fds) <= (1 if stop_r is not None else 0):
+                _logger.error("sgk_evdev_no_keyboards")
 
             while self._running:
                 try:
-                    readable, _, _ = select.select(list(fds.keys()), [], [], 1.0)
+                    readable, _, _ = select.select(list(fds.keys()), [], [], _RESCAN_S)
                 except (ValueError, OSError):
                     break
+
+                if not readable:
+                    self._sgk_rescan(fds)
+                    continue
 
                 for fd in readable:
                     if fd == stop_r:
@@ -248,7 +287,7 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
                                 ke = evdev.categorize(event)
                                 self._sgk_dispatch(
                                     ke.scancode, ke.keystate,  # type: ignore[union-attr]
-                                    pressed_mods, active_hold,
+                                    self._pressed_mods, self._active_hold,
                                     mod_code_to_name, trigger_codes,
                                 )
                             except Exception as exc:
@@ -256,15 +295,17 @@ class SgkEvdevHotkeyListener(SgkInputBackend):
                                     "sgk_evdev_event_error", extra={"error": str(exc)}
                                 )
                     except (OSError, BlockingIOError):
-                        fds.pop(fd, None)
+                        self._sgk_drop_device(fds, fd)
+                        self._sgk_rescan(fds)
         except Exception as exc:
             _logger.error("sgk_evdev_loop_error", extra={"error": str(exc)})
         finally:
-            for dev in keyboards:
-                try:
-                    dev.close()  # type: ignore[union-attr]
-                except Exception:
-                    pass
+            for dev in fds.values():
+                if dev is not None:
+                    try:
+                        dev.close()
+                    except Exception:
+                        pass
 
     def _sgk_dispatch(
         self,

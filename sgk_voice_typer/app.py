@@ -91,12 +91,14 @@ class SgkApp:
             no_speech_threshold=behavior["no_speech_threshold"],
         )
 
+        self._hotkeys = SgkHotkeyManager(self._cfg["hotkeys"])
         self._uinput = SgkUinputInjector()
         clipboard = SgkClipboard(
             self._uinput,
             clipboard_settle_ms=behavior["clipboard_settle_ms"],
             paste_settle_ms=behavior["paste_settle_ms"],
             restore_clipboard=behavior["restore_clipboard"],
+            keys_held=self._hotkeys.sgk_keys_held,
         )
         recorder = self._sgk_make_recorder(audio, behavior)
 
@@ -121,7 +123,6 @@ class SgkApp:
         )
         self._loop_thread.start()
 
-        self._hotkeys = SgkHotkeyManager(self._cfg["hotkeys"])
         self._hotkeys.sgk_set_handlers(
             on_press=self._pipeline.sgk_on_press,
             on_release=self._pipeline.sgk_on_release,

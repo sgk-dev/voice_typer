@@ -59,6 +59,9 @@ class SgkHotkeyManager:
     def sgk_is_paused(self) -> bool:
         return self._paused
 
+    def sgk_keys_held(self) -> bool:
+        return self._backend.sgk_keys_held()
+
     def sgk_start(self, loop: asyncio.AbstractEventLoop) -> bool:
         self._loop = loop
         if not self._backend.sgk_is_available():
