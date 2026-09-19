@@ -36,6 +36,7 @@ class _FakeUinput:
 @pytest.fixture(autouse=True)
 def _fake_heavy(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.setattr(app_mod, "sgk_ensure_cuda_libs", lambda device="cuda": None)
+    monkeypatch.setattr(app_mod, "sgk_configure_logging", lambda **k: None)
     monkeypatch.setattr(app_mod, "SgkUinputInjector", _FakeUinput)
     monkeypatch.setattr(
         "sgk_voice_typer.asr.transcriber.SgkTranscriber", _FakeTranscriber

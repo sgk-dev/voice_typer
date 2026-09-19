@@ -10,6 +10,7 @@ Hold **F9**, say a sentence, let go: it is transcribed on your GPU with
 faster-whisper and pasted into whatever window has focus - editor, browser,
 chat, terminal.
 
+![PyPI](https://img.shields.io/pypi/v/sgk-voice-typer?label=pypi)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-GNOME%20Wayland-e95420)
 ![License](https://img.shields.io/badge/license-GPLv3-blue)
@@ -70,19 +71,37 @@ Right-click for the menu:
 
 ## Install (GNOME Wayland / Ubuntu)
 
+Requires `wl-clipboard`, `python3-pyqt6`, `python3-evdev`, `libportaudio2` and
+membership in the `input` group (for the evdev listener and the `uinput`
+virtual keyboard). An NVIDIA GPU with CUDA gives sub-second transcription;
+without one, set `model.device` to `cpu` in Settings - it still works, just
+slower per phrase.
+
+**With pipx (from PyPI):**
+
 ```bash
-bash packaging/install.sh
-# log out and back in once (for the 'input' group);
-# VoiceTyper then starts with every login, or launch it from the applications menu.
+sudo apt install wl-clipboard python3-pyqt6 python3-evdev libportaudio2 pipx
+sudo usermod -aG input "$USER"            # then log out and back in once
+pipx install --system-site-packages sgk-voice-typer
+sgk-voice-typer --install                 # menu entry + launch on login
 ```
 
-Requires `wl-clipboard`, `python3-pyqt6`, `python3-evdev`, and membership in
-the `input` group (for the evdev listener and the `uinput` virtual keyboard).
-An NVIDIA GPU with CUDA gives sub-second transcription; without one, set
-`model.device` to `cpu` in Settings - it still works, just slower per phrase.
+The latest development version comes straight from GitHub instead:
+`pipx install --system-site-packages git+https://github.com/sgk-dev/voice_typer`.
+
+Then open the GNOME activities overview, search for **VoiceTyper** and launch
+it; it starts with every login from then on (toggle that in Settings ->
+General).
+
+**From a clone:**
+
+```bash
+bash packaging/install.sh
+# log out and back in once (for the 'input' group), then launch VoiceTyper from the menu
+```
 
 On the first run the model (`large-v3-turbo`, ~1.6 GB) is downloaded to the
-Hugging Face cache.
+Hugging Face cache; the tray icon stays dimmed while the model loads.
 
 ## Run in the foreground
 
@@ -107,6 +126,10 @@ language changes apply immediately.
   detection is not available on GNOME Wayland.
 - Speech recognition is not streaming: a long phrase means a few seconds of
   silence before the text lands.
+
+## Support the project
+
+If VoiceTyper saves you time, a **star on GitHub** helps a lot.
 
 ## License
 

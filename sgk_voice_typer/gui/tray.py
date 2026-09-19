@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from sgk_voice_typer import SGK_DONATE_URL, SGK_GITHUB_URL, __author__, __version__
+from sgk_voice_typer import SGK_GITHUB_URL, __author__, __version__
 from sgk_voice_typer.gui.i18n import sgk_normalize_lang, sgk_tr
 from sgk_voice_typer.utils.logger import sgk_get_logger
 
@@ -335,10 +335,7 @@ class SgkTrayIcon:
         links.setAlignment(center)
         star = QPushButton(sgk_tr("about.star", lang))
         star.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(SGK_GITHUB_URL)))
-        donate = QPushButton(sgk_tr("about.donate", lang))
-        donate.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(SGK_DONATE_URL)))
         links.addWidget(star)
-        links.addWidget(donate)
         layout.addLayout(links)
 
         signature = QLabel("Developed by SGK with ❤️")

@@ -1,3 +1,18 @@
+sgk-voice-typer (0.4.0) unstable; urgency=low
+
+  * Tray appears immediately; the model loads in the background (dimmed icon).
+  * Live preview transcribes only the last 20 s with greedy decoding.
+  * No idle polling: tray and overlay update through Qt signals.
+  * Keyboards plugged in after start are picked up; virtual keyboards ignored.
+  * Paste waits for physically held keys to be released first.
+  * Fixes: release delivered while paused; non-text clipboard no longer
+    restored as garbage; separate paste settle delay in Settings.
+  * One autostart scheme (XDG entry); systemd unit removed. --install-service
+    is now --install.
+  * Donate link removed; version read from the package.
+
+ -- SGK <sidash.seo@gmail.com>  Sat, 19 Sep 2026 17:00:00 +0300
+
 sgk-voice-typer (0.3.0) unstable; urgency=low
 
   * Hands-free lock (hold to latch recording), configurable or disabled.
