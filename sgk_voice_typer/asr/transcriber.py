@@ -51,8 +51,12 @@ class SgkTranscriber:
             "sgk_model_loaded", extra={"load_s": round(time.monotonic() - t0, 1)}
         )
 
-    def transcribe(self, audio: np.ndarray) -> str | None:
-        """Return recognised text, or None on silence / low confidence."""
+    def transcribe(self, audio: np.ndarray, fast: bool = False) -> str | None:
+        """Return recognised text, or None on silence / low confidence.
+
+        ``fast`` uses greedy decoding (beam 1) - for the live preview, where
+        latency matters more than the last percent of accuracy.
+        """
         if audio is None or audio.size == 0:
             return None
 
@@ -60,7 +64,7 @@ class SgkTranscriber:
         segments, info = self._model.transcribe(
             audio,
             language=self._language,
-            beam_size=self._beam_size,
+            beam_size=1 if fast else self._beam_size,
             vad_filter=True,
             no_speech_threshold=self._no_speech_threshold,
         )
@@ -85,6 +89,7 @@ class SgkTranscriber:
                 "lang": getattr(info, "language", None),
                 "audio_s": round(getattr(info, "duration", 0.0), 1),
                 "infer_s": round(time.monotonic() - t0, 2),
+                "fast": fast,
             },
         )
         _logger.debug("sgk_transcribe_text", extra={"text": text})

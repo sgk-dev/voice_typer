@@ -50,15 +50,25 @@ class SgkRecorder:
     def elapsed_s(self) -> float:
         return time.monotonic() - self._t0 if self._stream is not None else 0.0
 
-    def snapshot(self) -> np.ndarray | None:
-        """Copy of the audio captured so far, without stopping (for live preview)."""
+    def snapshot(self, tail_s: float | None = None) -> tuple[np.ndarray, bool] | None:
+        """Copy of the audio captured so far, without stopping (for live preview).
+
+        With ``tail_s`` only the last that many seconds are returned; the flag
+        says whether anything was cut off the front.
+        """
         if self._stream is None:
             return None
         with self._lock:
             if not self._chunks:
                 return None
             chunks = list(self._chunks)
-        return np.concatenate(chunks, axis=0).reshape(-1).astype("float32")
+        audio = np.concatenate(chunks, axis=0).reshape(-1).astype("float32")
+        if tail_s is None:
+            return audio, False
+        limit = int(tail_s * self._sample_rate)
+        if audio.size <= limit:
+            return audio, False
+        return audio[-limit:], True
 
     def start(self) -> bool:
         """Open the input stream. Returns False if the mic could not be opened."""

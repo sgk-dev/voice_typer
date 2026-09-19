@@ -66,3 +66,26 @@ def test_info_log_does_not_contain_recognised_text(caplog: pytest.LogCaptureFixt
         assert "secret" not in r.getMessage()
         assert "secret" not in str(getattr(r, "text", ""))
         assert getattr(r, "chars", None) == len("secret words here")
+
+
+def test_fast_mode_uses_greedy_decoding() -> None:
+    class _Seg:
+        text = "hi"
+
+    class _Info:
+        language = "en"
+        duration = 1.0
+
+    class _Model:
+        def __init__(self) -> None:
+            self.beams: list[int] = []
+
+        def transcribe(self, audio, **kw):
+            self.beams.append(kw["beam_size"])
+            return [_Seg()], _Info()
+
+    m = _Model()
+    t = SgkTranscriber(model=m, beam_size=5)
+    t.transcribe(np.ones(16000, dtype="float32"))
+    t.transcribe(np.ones(16000, dtype="float32"), fast=True)
+    assert m.beams == [5, 1]

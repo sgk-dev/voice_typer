@@ -19,12 +19,20 @@ hard duration cap is a loop timer that runs the same finish path as a release.
 from __future__ import annotations
 
 import asyncio
+import functools
 from concurrent.futures import Executor
 from typing import Callable
 
 from sgk_voice_typer.utils.logger import sgk_get_logger
 
 _logger = sgk_get_logger(__name__)
+
+# Live preview re-transcribes only this much of the most recent audio, with
+# greedy decoding: cost stays flat however long the dictation runs, and the
+# final (full, beam-search) pass never queues behind a long preview job.
+_PREVIEW_TAIL_S = 20.0
+_PREVIEW_MIN_SAMPLES = 12000     # < ~0.75 s at 16 kHz - nothing to show yet
+_PREVIEW_CUT_MARK = "\u2026 "
 
 # Pipeline states, surfaced to the tray.
 SGK_IDLE = "idle"
@@ -162,7 +170,8 @@ class SgkDictationPipeline:
             self._loop.create_task(self._sgk_finish(capped=True))
 
     # ------------------------------------------------------------------
-    # live preview: re-transcribe the audio-so-far on an interval
+    # live preview: re-transcribe the recent audio on an interval. The loop
+    # awaits each inference, so a slow one simply delays the next tick.
     # ------------------------------------------------------------------
 
     async def _sgk_preview_loop(self, gen: int) -> None:
@@ -171,18 +180,20 @@ class SgkDictationPipeline:
                 await asyncio.sleep(self._preview_interval_s)
                 if not self._active or gen != self._generation:
                     break
-                audio = self._recorder.snapshot()
-                if audio is None or audio.size < 12000:   # < ~0.75 s
+                snap = self._recorder.snapshot(_PREVIEW_TAIL_S)
+                if snap is None or snap[0].size < _PREVIEW_MIN_SAMPLES:
                     continue
+                audio, cut = snap
                 try:
                     text = await self._loop.run_in_executor(
-                        self._executor, self._transcriber.transcribe, audio
+                        self._executor,
+                        functools.partial(self._transcriber.transcribe, audio, fast=True),
                     )
                 except Exception as exc:
                     _logger.debug("sgk_preview_error", extra={"error": str(exc)})
                     continue
                 if text and self._active and gen == self._generation:
-                    self._emit_partial(text)
+                    self._emit_partial(_PREVIEW_CUT_MARK + text if cut else text)
         except asyncio.CancelledError:
             pass
 

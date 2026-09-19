@@ -36,8 +36,9 @@ class _FakeTranscriber:
         self._text = text
         self.calls = 0
 
-    def transcribe(self, audio):
+    def transcribe(self, audio, fast=False):
         self.calls += 1
+        self.fast_calls = getattr(self, "fast_calls", 0) + int(fast)
         return self._text
 
 
@@ -203,9 +204,9 @@ class _SnapRecorder(_FakeRecorder):
         super().__init__(audio)
         self.snaps = 0
 
-    def snapshot(self):
+    def snapshot(self, tail_s=None):
         self.snaps += 1
-        return self._audio
+        return self._audio, False
 
 
 async def test_live_preview_emits_partials_and_final_is_authoritative(executor) -> None:
@@ -226,6 +227,7 @@ async def test_live_preview_emits_partials_and_final_is_authoritative(executor) 
 
     assert rec.snaps >= 2
     assert partials and all(t == "partial and final" for t in partials)
+    assert p._transcriber.fast_calls == p._transcriber.calls - 1   # only the final pass is beam search
     assert clip.events == ["save", "type:partial and final:False", "restore"]
     assert p._preview_task is None           # cancelled on finish
 
@@ -244,3 +246,22 @@ async def test_preview_disabled_by_zero_interval(executor) -> None:
     await p.sgk_on_release(terminal=False)
     assert partials == []
     assert rec.snaps == 0
+
+
+async def test_preview_marks_a_cut_window(executor) -> None:
+    class _CutRecorder(_SnapRecorder):
+        def snapshot(self, tail_s=None):
+            self.snaps += 1
+            assert tail_s == 20.0
+            return self._audio, True
+
+    partials: list[str] = []
+    p = SgkDictationPipeline(
+        _CutRecorder(AUDIO), _FakeTranscriber("tail words"), _FakeClipboard(),
+        asyncio.get_event_loop(), executor, preview_interval_s=0.05,
+    )
+    p.sgk_set_partial_listener(partials.append)
+    await p.sgk_on_press(terminal=False)
+    await asyncio.sleep(0.12)
+    await p.sgk_on_release(terminal=False)
+    assert partials and partials[0].startswith("\u2026 tail words")

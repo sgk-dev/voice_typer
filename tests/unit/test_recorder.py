@@ -109,3 +109,15 @@ def test_mic_open_failure_returns_false(monkeypatch: pytest.MonkeyPatch) -> None
     rec = SgkRecorder()
     assert rec.start() is False
     assert rec.is_recording is False
+
+
+def test_snapshot_tail_window() -> None:
+    rec = SgkRecorder(sample_rate=100)
+    rec._stream = object()
+    rec._chunks = [np.ones((50, 1), dtype="float32"), np.zeros((70, 1), dtype="float32")]
+    full = rec.snapshot()
+    assert full is not None and full[0].size == 120 and full[1] is False
+    tail = rec.snapshot(tail_s=0.5)
+    assert tail is not None and tail[0].size == 50 and tail[1] is True
+    assert float(tail[0].sum()) == 0.0
+    rec._stream = None
