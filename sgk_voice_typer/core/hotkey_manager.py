@@ -82,7 +82,7 @@ class SgkHotkeyManager:
             return
 
         if name in _PTT_NAMES:
-            if self._paused:
+            if self._paused and phase == "press":
                 return
             terminal = _PTT_NAMES[name]
             handler = self._on_press if phase == "press" else (

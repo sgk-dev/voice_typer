@@ -57,6 +57,15 @@ def _rec(clip: SgkClipboard) -> _RunRecorder:
 
 
 class TestSave:
+    async def test_save_reads_text_only(self, clip: SgkClipboard) -> None:
+        await clip.sgk_save()
+        assert _rec(clip).calls[0][0] == ("wl-paste", "--type", "text", "--no-newline")
+
+    async def test_non_text_clipboard_is_an_empty_snapshot(self, clip: SgkClipboard) -> None:
+        _rec(clip).paste_result = (1, b"\x89PNG")
+        await clip.sgk_save()
+        assert clip._saved is None and clip._save_ok is True
+
     async def test_save_success(self, clip: SgkClipboard) -> None:
         _rec(clip).paste_result = (0, b"hello")
         await clip.sgk_save()

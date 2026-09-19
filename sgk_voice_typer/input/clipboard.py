@@ -89,13 +89,13 @@ class SgkClipboard:
         a successful read (saved = None), a crashed/timed-out read is not.
         """
         try:
-            rc, out = await self._sgk_run("wl-paste", "--no-newline")
+            rc, out = await self._sgk_run("wl-paste", "--type", "text", "--no-newline")
         except (OSError, asyncio.TimeoutError) as exc:
             self._saved, self._save_ok = None, False
             _logger.warning("sgk_clipboard_save_failed", extra={"error": str(exc)})
             return
-        # rc != 0 => "nothing is copied"; that is an empty clipboard, still a
-        # valid snapshot to restore to.
+        # rc != 0 => nothing is copied, or the clipboard holds no text (an
+        # image); either way the snapshot is "no text" and restore clears.
         self._saved = out.decode("utf-8", "replace") if rc == 0 and out else None
         self._save_ok = True
 

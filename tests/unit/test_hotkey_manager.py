@@ -77,12 +77,23 @@ async def test_toggle_again_after_interval(monkeypatch: pytest.MonkeyPatch) -> N
     assert toggles == [1, 1]
 
 
-async def test_paused_drops_ptt_but_not_toggle() -> None:
+async def test_paused_drops_ptt_press_but_not_release_or_toggle() -> None:
     m, presses, releases, toggles = _manager()
     m.sgk_set_paused(True)
     m._sgk_on_hotkey_raw("ptt", "press")
     m._sgk_on_hotkey_raw("ptt", "release")
     m._sgk_on_hotkey_raw("toggle", "tap")
     await _flush()
-    assert presses == [] and releases == []
+    assert presses == []
+    assert releases == [False]
     assert toggles == [1]
+
+
+async def test_pause_mid_hold_still_delivers_the_release() -> None:
+    m, presses, releases, _ = _manager()
+    m._sgk_on_hotkey_raw("ptt", "press")
+    m.sgk_set_paused(True)
+    m._sgk_on_hotkey_raw("ptt", "release")
+    await _flush()
+    assert presses == [False]
+    assert releases == [False]
