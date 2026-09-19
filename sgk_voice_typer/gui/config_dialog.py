@@ -220,7 +220,10 @@ class SgkConfigDialog:
         restore.setChecked(bool(beh.get("restore_clipboard", True)))
         settle = QSpinBox()
         settle.setRange(0, 1000)
-        settle.setValue(int(beh.get("clipboard_settle_ms", 80)))
+        settle.setValue(int(beh.get("clipboard_settle_ms", 150)))
+        paste_settle = QSpinBox()
+        paste_settle.setRange(0, 2000)
+        paste_settle.setValue(int(beh.get("paste_settle_ms", 400)))
         sound_on = QCheckBox()
         sound_on.setChecked(bool(fb.get("sound_enabled", True)))
         style_combo = QComboBox()
@@ -247,11 +250,12 @@ class SgkConfigDialog:
         bf.addRow(self._tr("cfg.beh.no_speech"), nsp)
         bf.addRow(self._tr("cfg.beh.restore"), restore)
         bf.addRow(self._tr("cfg.beh.settle"), settle)
+        bf.addRow(self._tr("cfg.beh.paste_settle"), paste_settle)
         bf.addRow(self._tr("cfg.beh.sound"), sound_box)
         tabs.addTab(b, self._tr("cfg.tab.behavior"))
         self._w.update(
             min_s=min_s, max_s=max_s, lock_on=lock_on, lock_s=lock_s,
-            nsp=nsp, restore=restore, settle=settle,
+            nsp=nsp, restore=restore, settle=settle, paste_settle=paste_settle,
             sound_on=sound_on, sound_style=style_combo,
         )
 
@@ -300,15 +304,14 @@ class SgkConfigDialog:
             ptt_terminal=w["ptt_terminal"].text().strip() or "shift+f9",
             toggle=w["toggle"].text().strip() or "ctrl+pause",
         )
-        settle = int(w["settle"].value())
         new.setdefault("behavior", {}).update(
             min_duration_s=round(w["min_s"].value(), 2),
             max_duration_s=round(w["max_s"].value(), 1),
             lock_hold_s=round(w["lock_s"].value(), 1) if w["lock_on"].isChecked() else 0.0,
             no_speech_threshold=round(w["nsp"].value(), 2),
             restore_clipboard=w["restore"].isChecked(),
-            clipboard_settle_ms=settle,
-            paste_settle_ms=settle,
+            clipboard_settle_ms=int(w["settle"].value()),
+            paste_settle_ms=int(w["paste_settle"].value()),
         )
         new.setdefault("feedback", {}).update(
             sound_enabled=w["sound_on"].isChecked(),

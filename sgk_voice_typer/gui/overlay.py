@@ -59,12 +59,10 @@ class SgkListeningOverlay:
     def __init__(
         self,
         level_getter: Callable[[], float],
-        position: str = "bottom-center",
         screen: str = "auto",
         preview: bool = False,
     ) -> None:
         self._level_getter = level_getter
-        self._position = position
         self._screen_mode = screen if screen in ("auto", "primary", "pointer") else "auto"
         self._preview_enabled = preview
         self._w_px = _WIDE_W if preview else _NARROW_W

@@ -63,46 +63,42 @@ class SgkApp:
         self._cfg = self._config.sgk_load()
         self._sgk_configure_logging()
 
-        model_cfg = self._cfg.get("model", {})
+        model_cfg = self._cfg["model"]
         # May replace the process (re-exec with LD_LIBRARY_PATH). Guarded so it
         # happens at most once; everything above is cheap to redo.
-        sgk_ensure_cuda_libs(model_cfg.get("device", "cuda"))
+        sgk_ensure_cuda_libs(model_cfg["device"])
 
         _logger.info("sgk_app_starting", extra={"version": __version__})
 
-        behavior = self._cfg.get("behavior", {})
-        audio = self._cfg.get("audio", {})
-        feedback = self._cfg.get("feedback", {})
+        behavior = self._cfg["behavior"]
+        audio = self._cfg["audio"]
+        feedback = self._cfg["feedback"]
 
         self._cues = SgkSoundCues(
-            enabled=feedback.get("sound_enabled", True),
-            volume=feedback.get("sound_volume", 0.25),
-            style=feedback.get("sound_style", "classic"),
+            enabled=feedback["sound_enabled"],
+            volume=feedback["sound_volume"],
+            style=feedback["sound_style"],
         )
 
         from sgk_voice_typer.asr.transcriber import SgkTranscriber
 
         transcriber = SgkTranscriber(
-            name=model_cfg.get("name", "large-v3-turbo"),
-            device=model_cfg.get("device", "cuda"),
-            compute_type=model_cfg.get("compute_type", "float16"),
-            language=model_cfg.get("language", "auto"),
-            beam_size=model_cfg.get("beam_size", 5),
-            no_speech_threshold=behavior.get("no_speech_threshold", 0.5),
+            name=model_cfg["name"],
+            device=model_cfg["device"],
+            compute_type=model_cfg["compute_type"],
+            language=model_cfg["language"],
+            beam_size=model_cfg["beam_size"],
+            no_speech_threshold=behavior["no_speech_threshold"],
         )
 
         self._uinput = SgkUinputInjector()
         clipboard = SgkClipboard(
             self._uinput,
-            clipboard_settle_ms=behavior.get("clipboard_settle_ms", 80),
-            paste_settle_ms=behavior.get("paste_settle_ms", 80),
-            restore_clipboard=behavior.get("restore_clipboard", True),
+            clipboard_settle_ms=behavior["clipboard_settle_ms"],
+            paste_settle_ms=behavior["paste_settle_ms"],
+            restore_clipboard=behavior["restore_clipboard"],
         )
-        recorder = SgkRecorder(
-            sample_rate=audio.get("sample_rate", 16000),
-            device=audio.get("device"),
-            min_duration_s=behavior.get("min_duration_s", 0.3),
-        )
+        recorder = self._sgk_make_recorder(audio, behavior)
 
         self._loop = asyncio.new_event_loop()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sgk-asr")
@@ -112,13 +108,9 @@ class SgkApp:
             clipboard,
             self._loop,
             self._executor,
-            max_duration_s=behavior.get("max_duration_s", 300.0),
-            lock_hold_s=behavior.get("lock_hold_s", 3.0),
-            preview_interval_s=(
-                feedback.get("preview_interval_s", 1.5)
-                if feedback.get("live_preview", True) and not self._no_gui
-                else 0.0
-            ),
+            max_duration_s=behavior["max_duration_s"],
+            lock_hold_s=behavior["lock_hold_s"],
+            preview_interval_s=self._sgk_preview_interval(feedback),
         )
         self._pipeline.sgk_set_state_listener(self._sgk_on_state)
         self._pipeline.sgk_set_lock_listener(self._sgk_on_lock)
@@ -129,20 +121,20 @@ class SgkApp:
         )
         self._loop_thread.start()
 
-        self._hotkeys = SgkHotkeyManager(self._cfg.get("hotkeys", {}))
+        self._hotkeys = SgkHotkeyManager(self._cfg["hotkeys"])
         self._hotkeys.sgk_set_handlers(
             on_press=self._pipeline.sgk_on_press,
             on_release=self._pipeline.sgk_on_release,
             on_toggle=self._sgk_toggle_enabled,
         )
-        if not behavior.get("enabled_on_start", True):
+        if not behavior["enabled_on_start"]:
             self._hotkeys.sgk_set_paused(True)
         if not self._hotkeys.sgk_start(self._loop):
             _logger.error("sgk_hotkeys_unavailable_continuing_without_ptt")
 
         _logger.info(
             "sgk_app_ready",
-            extra={"hotkeys": self._cfg.get("hotkeys", {}), "no_gui": self._no_gui},
+            extra={"hotkeys": self._cfg["hotkeys"], "no_gui": self._no_gui},
         )
 
         if not self._no_gui and self._sgk_start_gui():
@@ -199,13 +191,12 @@ class SgkApp:
     # ------------------------------------------------------------------
 
     def _sgk_configure_logging(self) -> None:
-        log_cfg = self._cfg.get("logging", {})
-        level = self._log_level_override or log_cfg.get("level", "INFO")
+        log_cfg = self._cfg["logging"]
         sgk_configure_logging(
-            level=level,
-            log_file=log_cfg.get("file"),
-            max_bytes=log_cfg.get("max_bytes", 5_242_880),
-            backup_count=log_cfg.get("backup_count", 3),
+            level=self._log_level_override or log_cfg["level"],
+            log_file=log_cfg["file"],
+            max_bytes=log_cfg["max_bytes"],
+            backup_count=log_cfg["backup_count"],
         )
 
     def _sgk_toggle_enabled(self) -> None:
@@ -226,7 +217,7 @@ class SgkApp:
         enabled = not self._cues.sgk_enabled
         fb = self._cfg.setdefault("feedback", {})
         fb["sound_enabled"] = enabled
-        self._cues.sgk_set(enabled=enabled, volume=fb.get("sound_volume", 0.18))
+        self._cues.sgk_set(enabled=enabled, volume=fb["sound_volume"])
         self._config.sgk_save(self._cfg)
         _logger.info("sgk_sound_toggle", extra={"enabled": enabled})
 
@@ -246,26 +237,25 @@ class SgkApp:
         self._qt_app = QApplication.instance() or QApplication(sys.argv)
         self._qt_app.setQuitOnLastWindowClosed(False)
 
-        ui_cfg = self._cfg.get("ui", {})
+        ui_cfg = self._cfg["ui"]
         self._tray = SgkTrayIcon(
             on_pause_toggle=self._sgk_toggle_enabled,
             on_open_settings=self._sgk_open_settings,
             on_quit=self.sgk_stop,
             is_paused_getter=lambda: bool(self._hotkeys and self._hotkeys.sgk_is_paused()),
-            lang=ui_cfg.get("language", "en"),
-            icon_style=ui_cfg.get("tray_icon_style", "color"),
+            lang=ui_cfg["language"],
+            icon_style=ui_cfg["tray_icon_style"],
             on_sound_toggle=self._sgk_toggle_sound,
             is_sound_enabled_getter=lambda: bool(self._cues and self._cues.sgk_enabled),
         )
         self._tray.sgk_create()
 
-        fb_cfg = self._cfg.get("feedback", {})
-        if fb_cfg.get("overlay_enabled", True) and self._pipeline is not None:
+        fb_cfg = self._cfg["feedback"]
+        if fb_cfg["overlay_enabled"] and self._pipeline is not None:
             self._overlay = SgkListeningOverlay(
                 level_getter=self._pipeline.sgk_current_level,
-                position=fb_cfg.get("overlay_position", "bottom-center"),
-                screen=fb_cfg.get("overlay_screen", "auto"),
-                preview=fb_cfg.get("live_preview", True),
+                screen=fb_cfg["overlay_screen"],
+                preview=fb_cfg["live_preview"],
             )
             self._overlay.sgk_create()
 
@@ -336,58 +326,47 @@ class SgkApp:
 
     def _sgk_on_settings_saved(self, new_cfg: dict[str, Any]) -> None:
         old = self._cfg
+        new_cfg = SgkConfig.sgk_with_defaults(new_cfg)
         self._config.sgk_save(new_cfg)
         self._cfg = new_cfg
         _logger.info("sgk_settings_saved")
 
-        beh = new_cfg.get("behavior", {})
+        beh = new_cfg["behavior"]
+        fb = new_cfg["feedback"]
         if self._pipeline is not None:
             self._pipeline.clipboard.sgk_configure(
-                clipboard_settle_ms=beh.get("clipboard_settle_ms", 80),
-                paste_settle_ms=beh.get("paste_settle_ms", 80),
-                restore_clipboard=bool(beh.get("restore_clipboard", True)),
+                clipboard_settle_ms=beh["clipboard_settle_ms"],
+                paste_settle_ms=beh["paste_settle_ms"],
+                restore_clipboard=bool(beh["restore_clipboard"]),
             )
-            self._pipeline.sgk_set_max_duration(beh.get("max_duration_s", 300.0))
-            self._pipeline.sgk_set_lock_hold(beh.get("lock_hold_s", 3.0))
-
-        fb = new_cfg.get("feedback", {})
+            self._pipeline.sgk_set_max_duration(beh["max_duration_s"])
+            self._pipeline.sgk_set_lock_hold(beh["lock_hold_s"])
+            self._pipeline.sgk_set_preview_interval(self._sgk_preview_interval(fb))
         if self._cues is not None:
             self._cues.sgk_set(
-                enabled=fb.get("sound_enabled", True),
-                volume=fb.get("sound_volume", 0.18),
-                style=fb.get("sound_style", "classic"),
-            )
-        if self._pipeline is not None:
-            self._pipeline.sgk_set_preview_interval(
-                fb.get("preview_interval_s", 1.5)
-                if fb.get("live_preview", True) and not self._no_gui
-                else 0.0
+                enabled=fb["sound_enabled"], volume=fb["sound_volume"], style=fb["sound_style"]
             )
 
-        # Microphone / min-duration can be swapped live.
-        new_audio = new_cfg.get("audio", {})
-        old_beh = old.get("behavior", {})
-        if new_audio != old.get("audio", {}) or beh.get("min_duration_s") != old_beh.get(
-            "min_duration_s"
-        ):
-            self._sgk_swap_recorder(new_audio, beh)
+        if new_cfg["audio"] != old["audio"] or beh["min_duration_s"] != old["behavior"]["min_duration_s"]:
+            if self._pipeline is not None:
+                self._pipeline.sgk_set_recorder(self._sgk_make_recorder(new_cfg["audio"], beh))
+                _logger.info("sgk_recorder_swapped", extra={"device": str(new_cfg["audio"]["device"])})
 
-        # Model and hotkey changes need a restart (the dialog says so).
-        if new_cfg.get("model", {}) != old.get("model", {}) or new_cfg.get(
-            "hotkeys", {}
-        ) != old.get("hotkeys", {}):
+        if new_cfg["model"] != old["model"] or new_cfg["hotkeys"] != old["hotkeys"]:
             _logger.info("sgk_settings_restart_required")
 
-    def _sgk_swap_recorder(self, audio: dict[str, Any], beh: dict[str, Any]) -> None:
-        if self._pipeline is None:
-            return
-        recorder = SgkRecorder(
-            sample_rate=audio.get("sample_rate", 16000),
-            device=audio.get("device"),
-            min_duration_s=beh.get("min_duration_s", 0.3),
+    @staticmethod
+    def _sgk_make_recorder(audio: dict[str, Any], beh: dict[str, Any]) -> SgkRecorder:
+        return SgkRecorder(
+            sample_rate=audio["sample_rate"],
+            device=audio["device"],
+            min_duration_s=beh["min_duration_s"],
         )
-        self._pipeline.sgk_set_recorder(recorder)
-        _logger.info("sgk_recorder_swapped", extra={"device": str(audio.get("device"))})
+
+    def _sgk_preview_interval(self, fb: dict[str, Any]) -> float:
+        if fb["live_preview"] and not self._no_gui:
+            return float(fb["preview_interval_s"])
+        return 0.0
 
     def _sgk_block_until_stopped(self) -> None:
         assert self._loop_thread is not None

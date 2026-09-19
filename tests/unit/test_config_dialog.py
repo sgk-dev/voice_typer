@@ -39,7 +39,8 @@ def test_collect_roundtrips_defaults(qapp) -> None:
     assert out["hotkeys"]["ptt"] == "f9"
     assert out["model"]["name"] == "large-v3-turbo"
     assert out["audio"]["device"] is None
-    assert out["behavior"]["clipboard_settle_ms"] == out["behavior"]["paste_settle_ms"]
+    assert out["behavior"]["clipboard_settle_ms"] == 150
+    assert out["behavior"]["paste_settle_ms"] == 400
     assert out["behavior"]["lock_hold_s"] == pytest.approx(3.0)
 
 
@@ -76,6 +77,7 @@ def test_edited_values_are_collected(qapp) -> None:
     d._w["nsp"].setValue(0.7)
     d._w["restore"].setChecked(False)
     d._w["settle"].setValue(120)
+    d._w["paste_settle"].setValue(250)
 
     out = d._sgk_collect()
     assert out["hotkeys"]["ptt"] == "f8"
@@ -83,7 +85,7 @@ def test_edited_values_are_collected(qapp) -> None:
     assert out["behavior"]["no_speech_threshold"] == pytest.approx(0.7)
     assert out["behavior"]["restore_clipboard"] is False
     assert out["behavior"]["clipboard_settle_ms"] == 120
-    assert out["behavior"]["paste_settle_ms"] == 120
+    assert out["behavior"]["paste_settle_ms"] == 250
 
 
 def test_ui_changed_fires_only_on_ui_diff(qapp) -> None:

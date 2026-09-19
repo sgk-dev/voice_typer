@@ -50,9 +50,8 @@ class TestDefaults:
         assert data["ui"]["language"] == "en"
         assert data["ui"]["tray_icon_style"] == "color"
 
-    def test_default_logging_is_json(self, config: SgkConfig) -> None:
+    def test_default_logging_file(self, config: SgkConfig) -> None:
         data = config.sgk_load()
-        assert data["logging"]["format"] == "json"
         assert data["logging"]["file"].endswith("voice_typer.log")
 
     def test_default_feedback(self, config: SgkConfig) -> None:
@@ -84,20 +83,6 @@ class TestLoadSave:
         data = SgkConfig(config_path=config_path).sgk_load()
         assert data["hotkeys"]["ptt"] == "f9"
 
-
-class TestGetSet:
-    def test_nested_get(self, config: SgkConfig) -> None:
-        config.sgk_load()
-        assert isinstance(config.sgk_get("behavior", "clipboard_settle_ms"), int)
-
-    def test_get_missing_returns_default(self, config: SgkConfig) -> None:
-        config.sgk_load()
-        assert config.sgk_get("nope", "nope", default="x") == "x"
-
-    def test_set_persists(self, config: SgkConfig, config_path: Path) -> None:
-        config.sgk_load()
-        config.sgk_set("model", "device", value="cpu")
-        assert SgkConfig(config_path=config_path).sgk_load()["model"]["device"] == "cpu"
 
 
 class TestMergeDefaults:

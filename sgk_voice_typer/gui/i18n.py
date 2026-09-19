@@ -35,7 +35,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "about.license": {"en": "License", "ru": "Лицензия"},
     "about.star": {"en": "★ Star on GitHub", "ru": "★ Звезда на GitHub"},
     "about.donate": {"en": "♥ Support the project", "ru": "♥ Поддержать проект"},
-    "about.close": {"en": "Close", "ru": "Закрыть"},
     "about.thanks": {
         "en": "If VoiceTyper saves you time, a star or a small donation helps a lot.",
         "ru": "Если VoiceTyper экономит вам время - звезда или небольшой донат очень помогают.",
@@ -56,7 +55,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cfg.model.device": {"en": "Device:", "ru": "Устройство:"},
     "cfg.model.compute": {"en": "Compute type:", "ru": "Тип вычислений:"},
     "cfg.model.language": {"en": "Recognition language:", "ru": "Язык распознавания:"},
-    "cfg.model.lang_auto": {"en": "Auto-detect", "ru": "Автоопределение"},
     "cfg.audio.device": {"en": "Microphone:", "ru": "Микрофон:"},
     "cfg.audio.default": {"en": "System default", "ru": "Системный по умолчанию"},
     "cfg.hotkey.ptt": {"en": "Record and type:", "ru": "Запись и ввод:"},
@@ -81,6 +79,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cfg.beh.no_speech": {"en": "Silence threshold (0-1):", "ru": "Порог тишины (0-1):"},
     "cfg.beh.restore": {"en": "Restore clipboard after typing:", "ru": "Восстанавливать буфер после ввода:"},
     "cfg.beh.settle": {"en": "Clipboard settle delay (ms):", "ru": "Задержка буфера обмена (мс):"},
+    "cfg.beh.paste_settle": {"en": "Delay after paste (ms):", "ru": "Задержка после вставки (мс):"},
 }
 
 

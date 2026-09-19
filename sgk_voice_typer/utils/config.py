@@ -55,7 +55,6 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
         "sound_volume": 0.18,         # 0.0 - 1.0
         "sound_style": "classic",     # see feedback/cues.py::SGK_SOUND_STYLES
         "overlay_enabled": True,
-        "overlay_position": "bottom-center",   # currently the only value
         "overlay_screen": "auto",     # "auto" (follow the focused window) | "primary" | "pointer"
         "live_preview": True,         # show the growing transcript in the overlay while speaking
         "preview_interval_s": 1.5,    # how often to re-transcribe for the preview
@@ -63,7 +62,6 @@ _SGK_DEFAULT_CONFIG: dict[str, Any] = {
     "logging": {
         "level": "INFO",
         "file": "~/.local/share/sgk-voice-typer/voice_typer.log",
-        "format": "json",
         "max_bytes": 5_242_880,       # 5 MB
         "backup_count": 3,
     },
@@ -114,36 +112,19 @@ class SgkConfig:
                 extra={"path": str(self._path), "error": str(exc)},
             )
 
-    def sgk_get(self, *keys: str, default: Any = None) -> Any:
-        """Nested key access: sgk_get('behavior', 'min_duration_s')."""
-        node: Any = self._data
-        for key in keys:
-            if not isinstance(node, dict):
-                return default
-            node = node.get(key, default)
-        return node
-
-    def sgk_set(self, *keys: str, value: Any) -> None:
-        """Set a nested key and persist."""
-        node = self._data
-        for key in keys[:-1]:
-            node = node.setdefault(key, {})
-        node[keys[-1]] = value
-        self.sgk_save()
-
     @staticmethod
     def sgk_get_default() -> dict[str, Any]:
         return copy.deepcopy(_SGK_DEFAULT_CONFIG)
 
     def _sgk_merge_defaults(self, loaded: dict[str, Any]) -> dict[str, Any]:
         """Deep-merge loaded config onto the defaults (defaults fill gaps)."""
-        result = copy.deepcopy(_SGK_DEFAULT_CONFIG)
-        _sgk_deep_merge(result, loaded)
-        return result
+        return self.sgk_with_defaults(loaded)
 
-    @property
-    def data(self) -> dict[str, Any]:
-        return self._data
+    @staticmethod
+    def sgk_with_defaults(data: dict[str, Any]) -> dict[str, Any]:
+        result = copy.deepcopy(_SGK_DEFAULT_CONFIG)
+        _sgk_deep_merge(result, data)
+        return result
 
 
 def _sgk_deep_merge(base: dict[str, Any], override: dict[str, Any]) -> None:
