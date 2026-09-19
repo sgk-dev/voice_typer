@@ -1,7 +1,9 @@
-"""Generated packaging text (`.desktop` entry, systemd user unit).
+"""Generated packaging text (the `.desktop` entry, also used for XDG autostart).
 
-Built in code so ``--install-desktop`` / ``--install-service`` work from a pip
-or pipx install, where the repo's ``packaging/`` directory is not present.
+Built in code so ``--install`` works from a pip or pipx install, where the
+repo's ``packaging/`` directory is not present. Launch-on-login is the XDG
+autostart entry only: it inherits the full session environment (DISPLAY,
+WAYLAND_DISPLAY, D-Bus) and the settings dialog can toggle it.
 """
 
 from __future__ import annotations
@@ -23,26 +25,6 @@ StartupNotify=false
 
 _AUTOSTART_EXTRA = "X-GNOME-Autostart-enabled=true\nX-GNOME-Autostart-Delay=3\n"
 
-_SYSTEMD_UNIT = """\
-[Unit]
-Description=VoiceTyper - push-to-talk speech daemon
-Documentation=https://github.com/sgk-dev/voice_typer
-After=graphical-session.target
-PartOf=graphical-session.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-ExecStart={exec_cmd}
-Restart=on-failure
-RestartSec=3s
-Environment=PYTHONUNBUFFERED=1
-PassEnvironment=WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE DBUS_SESSION_BUS_ADDRESS PATH
-
-[Install]
-WantedBy=graphical-session.target
-"""
 
 
 def sgk_desktop_entry(exec_cmd: str, autostart: bool = False) -> str:
@@ -50,7 +32,3 @@ def sgk_desktop_entry(exec_cmd: str, autostart: bool = False) -> str:
     if autostart:
         text += _AUTOSTART_EXTRA
     return text
-
-
-def sgk_systemd_unit(exec_cmd: str) -> str:
-    return _SYSTEMD_UNIT.format(exec_cmd=exec_cmd)

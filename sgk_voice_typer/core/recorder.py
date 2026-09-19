@@ -47,9 +47,6 @@ class SgkRecorder:
         """Latest smoothed input level (RMS), 0.0 when not recording."""
         return self._level if self._stream is not None else 0.0
 
-    def elapsed_s(self) -> float:
-        return time.monotonic() - self._t0 if self._stream is not None else 0.0
-
     def snapshot(self, tail_s: float | None = None) -> tuple[np.ndarray, bool] | None:
         """Copy of the audio captured so far, without stopping (for live preview).
 

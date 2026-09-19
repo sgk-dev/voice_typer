@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sgk_voice_typer import __version__
 from sgk_voice_typer.utils.logger import sgk_get_logger
-from sgk_voice_typer.utils.resources import sgk_desktop_entry, sgk_systemd_unit
+from sgk_voice_typer.utils.resources import sgk_desktop_entry
 
 _logger = sgk_get_logger(__name__)
 
@@ -22,7 +22,6 @@ _ICON_DST = (
     / ".local" / "share" / "icons" / "hicolor" / "256x256" / "apps" / "voice-typer.png"
 )
 _AUTOSTART_DST = Path.home() / ".config" / "autostart" / "voice-typer.desktop"
-_SERVICE_DST = Path.home() / ".config" / "systemd" / "user" / "sgk-voice-typer.service"
 
 
 def _sgk_exec_cmd() -> str:
@@ -49,9 +48,11 @@ def _sgk_parse_args() -> argparse.Namespace:
         help="Add VoiceTyper to the applications menu and exit",
     )
     parser.add_argument(
+        "--install",
         "--install-service",
+        dest="install",
         action="store_true",
-        help="Install the systemd user service + autostart + menu entry and exit",
+        help="Add VoiceTyper to the applications menu and launch it on login, then exit",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args()
@@ -77,17 +78,14 @@ def _sgk_install_desktop() -> None:
     print('Done. Look for "VoiceTyper" in the applications overview.')
 
 
-def _sgk_install_service() -> None:
+def _sgk_install() -> None:
     _sgk_install_desktop()
-    for dst in (_SERVICE_DST, _AUTOSTART_DST):
-        dst.parent.mkdir(parents=True, exist_ok=True)
+    _AUTOSTART_DST.parent.mkdir(parents=True, exist_ok=True)
     _AUTOSTART_DST.write_text(
         sgk_desktop_entry(_sgk_exec_cmd(), autostart=True), encoding="utf-8"
     )
     print(f"Installed: {_AUTOSTART_DST}")
-    _SERVICE_DST.write_text(sgk_systemd_unit(_sgk_exec_cmd()), encoding="utf-8")
-    print(f"Installed: {_SERVICE_DST}")
-    print("Enable with: systemctl --user enable --now sgk-voice-typer")
+    print("VoiceTyper will start on your next login; start it now from the applications menu.")
 
 
 def main() -> None:
@@ -96,8 +94,8 @@ def main() -> None:
     if args.install_desktop:
         _sgk_install_desktop()
         sys.exit(0)
-    if args.install_service:
-        _sgk_install_service()
+    if args.install:
+        _sgk_install()
         sys.exit(0)
 
     from sgk_voice_typer.utils.single_instance import sgk_acquire_single_instance

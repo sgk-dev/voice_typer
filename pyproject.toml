@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sgk-voice-typer"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Push-to-talk voice input daemon for Linux / GNOME Wayland"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -46,6 +46,9 @@ sgk-voice-typer = "sgk_voice_typer.__main__:main"
 Homepage = "https://github.com/sgk-dev/voice_typer"
 Repository = "https://github.com/sgk-dev/voice_typer"
 "Bug Tracker" = "https://github.com/sgk-dev/voice_typer/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "sgk_voice_typer.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["sgk_voice_typer*"]

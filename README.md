@@ -58,7 +58,8 @@ All configurable in Settings or `~/.config/sgk-voice-typer/config.json`.
 
 ## Tray and settings
 
-The tray icon shows the state: idle, recording, transcribing, or paused.
+The tray icon shows the state: loading the model, idle, recording,
+transcribing, or paused.
 Right-click for the menu:
 
 - **Enabled / Paused**
@@ -71,8 +72,8 @@ Right-click for the menu:
 
 ```bash
 bash packaging/install.sh
-# log out and back in once (for the 'input' group), then:
-systemctl --user start sgk-voice-typer
+# log out and back in once (for the 'input' group);
+# VoiceTyper then starts with every login, or launch it from the applications menu.
 ```
 
 Requires `wl-clipboard`, `python3-pyqt6`, `python3-evdev`, and membership in

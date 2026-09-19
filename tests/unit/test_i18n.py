@@ -33,3 +33,15 @@ def test_russian_falls_back_to_english_when_absent() -> None:
         assert i18n.sgk_tr("_tmp", "ru") == "Only English"
     finally:
         del i18n._STRINGS["_tmp"]
+
+
+def test_every_string_has_all_languages() -> None:
+    for key, entry in i18n._STRINGS.items():
+        for lang in i18n.SGK_LANGUAGES:
+            assert entry.get(lang), f"{key} missing {lang}"
+
+
+def test_no_em_dash_in_strings() -> None:
+    for key, entry in i18n._STRINGS.items():
+        for lang, value in entry.items():
+            assert "\u2014" not in value and "\u2013" not in value, f"{key}/{lang} has a long dash"
