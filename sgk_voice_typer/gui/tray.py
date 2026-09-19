@@ -1,10 +1,11 @@
 """System tray icon for VoiceTyper (PyQt6 QSystemTrayIcon).
 
-Four visual states: idle, recording, transcribing (processing), paused. The
-pipeline reports idle/recording/processing from the asyncio thread and the
-enable/disable toggle sets paused from anywhere; both just store a value and a
-250 ms QTimer on the Qt thread reconciles the icon and tooltip, so no Qt object
-is ever touched off the Qt thread.
+Five visual states: loading (model not ready yet), idle, recording,
+transcribing (processing), paused. The pipeline reports its state from the
+asyncio thread and the toggles set paused / sound from anywhere; each setter
+stores a plain value and emits a Qt signal, which Qt queues onto the GUI thread
+where ``_sgk_reconcile`` repaints. No Qt object is touched off the Qt thread and
+nothing polls while idle.
 
 Menu: Enabled/Paused toggle (also on left-click), Settings..., About, Quit.
 """
@@ -24,6 +25,7 @@ _ICON = Path(__file__).parent / "icon.png"
 
 # state -> (overlay colour or None, opacity)
 _STATE_TINT = {
+    "loading": ("#4A90D9", 0.55),
     "idle": (None, 1.0),
     "recording": ("#e53935", 1.0),
     "processing": ("#fb8c00", 1.0),
@@ -89,6 +91,15 @@ def _sgk_make_icon(state: str, style: str = "color"):
     return QIcon(pm)
 
 
+def _sgk_make_bridge():
+    from PyQt6.QtCore import QObject, pyqtSignal
+
+    class _SgkBridge(QObject):
+        changed = pyqtSignal()
+
+    return _SgkBridge()
+
+
 def _sgk_theme_icon(name: str):
     from PyQt6.QtGui import QIcon
 
@@ -105,20 +116,16 @@ class SgkTrayIcon:
         on_pause_toggle: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_quit: Callable[[], None],
-        is_paused_getter: Callable[[], bool] | None = None,
         lang: str = "en",
         icon_style: str = "color",
         on_sound_toggle: Callable[[], None] | None = None,
-        is_sound_enabled_getter: Callable[[], bool] | None = None,
     ) -> None:
         self._on_pause_toggle = on_pause_toggle
         self._on_open_settings = on_open_settings
         self._on_quit = on_quit
-        self._is_paused_getter = is_paused_getter
         self._lang = sgk_normalize_lang(lang)
         self._icon_style = icon_style if icon_style in ("color", "mono") else "color"
         self._on_sound_toggle = on_sound_toggle
-        self._is_sound_enabled_getter = is_sound_enabled_getter
 
         self._tray: Any = None
         self._menu: Any = None
@@ -127,23 +134,33 @@ class SgkTrayIcon:
         self._settings_action: Any = None
         self._about_action: Any = None
         self._quit_action: Any = None
-        self._timer: Any = None
+        self._bridge: Any = None
 
-        self._pipeline_state = "idle"   # set from the asyncio thread
-        self._paused = False            # set from anywhere
-        self._sound_enabled = True      # mirrored from the getter each reconcile
-        self._shown_key: Any = None     # (effective_state, style, lang, sound) last painted
+        self._pipeline_state = "loading"   # set from the asyncio thread
+        self._paused = False               # set from anywhere
+        self._sound_enabled = True         # set from anywhere
+        self._shown_key: Any = None        # (effective_state, style, lang, sound) last painted
 
     # ------------------------------------------------------------------
     # public - safe to call from any thread
     # ------------------------------------------------------------------
 
     def sgk_set_state(self, state: str) -> None:
-        if state in ("idle", "recording", "processing"):
+        if state in _STATE_TINT and state != "paused":
             self._pipeline_state = state
+            self._sgk_notify()
 
     def sgk_set_paused(self, paused: bool) -> None:
         self._paused = bool(paused)
+        self._sgk_notify()
+
+    def sgk_set_sound_enabled(self, enabled: bool) -> None:
+        self._sound_enabled = bool(enabled)
+        self._sgk_notify()
+
+    def _sgk_notify(self) -> None:
+        if self._bridge is not None:
+            self._bridge.changed.emit()
 
     # ------------------------------------------------------------------
     # Qt thread only
@@ -151,12 +168,13 @@ class SgkTrayIcon:
 
     def sgk_create(self) -> None:
         try:
-            from PyQt6.QtCore import QTimer
             from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
         except ImportError:
             _logger.warning("sgk_tray_pyqt6_missing")
             return
 
+        self._bridge = _sgk_make_bridge()
+        self._bridge.changed.connect(self._sgk_reconcile)
         self._tray = QSystemTrayIcon()
 
         def _activated(reason) -> None:
@@ -187,11 +205,6 @@ class SgkTrayIcon:
 
         self._sgk_reconcile(force=True)
         self._tray.show()
-
-        self._timer = QTimer()
-        self._timer.setInterval(250)
-        self._timer.timeout.connect(self._sgk_reconcile)
-        self._timer.start()
         _logger.info("sgk_tray_created")
 
     def sgk_apply_ui(self, lang: str | None = None, icon_style: str | None = None) -> None:
@@ -202,11 +215,12 @@ class SgkTrayIcon:
         self._sgk_reconcile(force=True)
 
     def sgk_destroy(self) -> None:
-        if self._timer is not None:
+        if self._bridge is not None:
             try:
-                self._timer.stop()
+                self._bridge.changed.disconnect(self._sgk_reconcile)
             except Exception:
                 pass
+            self._bridge = None
         if self._tray is not None:
             try:
                 self._tray.hide()
@@ -216,11 +230,6 @@ class SgkTrayIcon:
     # ------------------------------------------------------------------
 
     def _effective_state(self) -> str:
-        if self._is_paused_getter is not None:
-            try:
-                self._paused = bool(self._is_paused_getter())
-            except Exception:
-                pass
         return "paused" if self._paused else self._pipeline_state
 
     def _sgk_on_sound_toggled(self, _checked: bool) -> None:
@@ -231,11 +240,6 @@ class SgkTrayIcon:
         if self._tray is None:
             return
         state = self._effective_state()
-        if self._is_sound_enabled_getter is not None:
-            try:
-                self._sound_enabled = bool(self._is_sound_enabled_getter())
-            except Exception:
-                pass
         key = (state, self._icon_style, self._lang, self._sound_enabled)
         if key == self._shown_key and not force:
             return

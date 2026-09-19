@@ -12,7 +12,9 @@ render timer. With ``preview=True`` the widget is wider and taller, and the top
 band shows the growing transcript (``sgk_set_preview``) as the pipeline
 re-transcribes the audio so far - nothing is typed into the focused app until
 the recording stops. No Qt object is touched off the Qt thread: the setters
-just store values, a 120 ms timer reconciles visibility, the 33 ms timer paints.
+store values and emit a Qt signal that lands on the GUI thread, where
+``_reconcile`` shows / hides the widget. The 33 ms paint timer runs only while
+the pill is visible, so an idle daemon has no timers at all.
 """
 
 from __future__ import annotations
@@ -39,7 +41,6 @@ _PREVIEW_MAX_LINES = 6
 _BOTTOM_MARGIN = 96
 _LEVEL_GAIN = 9.0          # RMS (~0.03 speech) -> 0..1 bar fill
 _RENDER_MS = 33
-_RECONCILE_MS = 120
 
 # Equaliser bar colour: a slow, continuous hue shimmer rather than a flat
 # fill. Hue drifts within a blue/cyan/violet band so it stays pleasant
@@ -71,8 +72,9 @@ class SgkListeningOverlay:
         self._anchor_bottom = 0    # y of the pill's bottom edge; the pill grows upward
         self._widget: Any = None
         self._render_timer: Any = None
-        self._reconcile_timer: Any = None
+        self._bridge: Any = None
         self._anim: Any = None
+        self._fitted_text: str | None = None
         self._want_visible = False
         self._locked = False
         self._warned = False
@@ -90,12 +92,17 @@ class SgkListeningOverlay:
         if not listening:
             self._locked = False
             self._preview_text = ""
+        self._sgk_notify()
 
     def sgk_set_locked(self, locked: bool) -> None:
         self._locked = bool(locked)
 
     def sgk_set_preview(self, text: str) -> None:
         self._preview_text = text or ""
+
+    def _sgk_notify(self) -> None:
+        if self._bridge is not None:
+            self._bridge.changed.emit()
 
     # ------------------------------------------------------------------
     # Qt thread
@@ -129,19 +136,24 @@ class SgkListeningOverlay:
         self._render_timer.setInterval(_RENDER_MS)
         self._render_timer.timeout.connect(self._render_tick)
 
-        self._reconcile_timer = QTimer()
-        self._reconcile_timer.setInterval(_RECONCILE_MS)
-        self._reconcile_timer.timeout.connect(self._reconcile)
-        self._reconcile_timer.start()
+        from sgk_voice_typer.gui.tray import _sgk_make_bridge
+
+        self._bridge = _sgk_make_bridge()
+        self._bridge.changed.connect(self._reconcile)
         _logger.info("sgk_overlay_created")
 
     def sgk_destroy(self) -> None:
-        for t in (self._render_timer, self._reconcile_timer):
+        if self._bridge is not None:
             try:
-                if t is not None:
-                    t.stop()
+                self._bridge.changed.disconnect(self._reconcile)
             except Exception:
                 pass
+            self._bridge = None
+        try:
+            if self._render_timer is not None:
+                self._render_timer.stop()
+        except Exception:
+            pass
         if self._widget is not None:
             try:
                 self._widget.hide()
@@ -173,6 +185,7 @@ class SgkListeningOverlay:
             geo = screen.availableGeometry()
             if self._preview_enabled:
                 self._h_px = _BARS_H + _preview_band_h(_PREVIEW_MIN_LINES)
+                self._fitted_text = None
             self._anchor_x = geo.x() + (geo.width() - self._w_px) // 2
             self._anchor_bottom = geo.y() + geo.height() - _BOTTOM_MARGIN
             y = self._anchor_bottom - self._h_px
@@ -272,6 +285,9 @@ class SgkListeningOverlay:
         from PyQt6.QtGui import QFont, QFontMetrics
 
         text = self._preview_text.strip()
+        if text == self._fitted_text:
+            return
+        self._fitted_text = text
         lines = _PREVIEW_MIN_LINES
         if text:
             font = QFont()

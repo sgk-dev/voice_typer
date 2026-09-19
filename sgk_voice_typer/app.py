@@ -9,14 +9,21 @@ Wires everything together:
 * the evdev push-to-talk listener
 * the Qt tray, when a display and PyQt6 are available
 
-Qt owns the main thread; the asyncio loop runs in a daemon thread. Shutdown is
-driven from SIGTERM/SIGINT in __main__.
+Qt owns the main thread; the asyncio loop runs in a daemon thread. The Whisper
+model loads on the transcription executor *after* the tray is up, so the user
+sees a "loading" icon within a second instead of nothing for 10-15 s; the
+push-to-talk listener starts once the model is ready. Shutdown is driven from
+SIGTERM/SIGINT in __main__; with the GUI running, the signal is delivered to
+Python through ``signal.set_wakeup_fd`` + a ``QSocketNotifier`` so it never
+waits for an unrelated Qt callback.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import signal
+import socket
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -53,6 +60,8 @@ class SgkApp:
         self._tray: Any = None
         self._overlay: Any = None
         self._qt_app: Any = None
+        self._sig_socks: tuple[socket.socket, socket.socket] | None = None
+        self._sig_notifier: Any = None
         self._stopped = False
 
     # ------------------------------------------------------------------
@@ -80,17 +89,6 @@ class SgkApp:
             style=feedback["sound_style"],
         )
 
-        from sgk_voice_typer.asr.transcriber import SgkTranscriber
-
-        transcriber = SgkTranscriber(
-            name=model_cfg["name"],
-            device=model_cfg["device"],
-            compute_type=model_cfg["compute_type"],
-            language=model_cfg["language"],
-            beam_size=model_cfg["beam_size"],
-            no_speech_threshold=behavior["no_speech_threshold"],
-        )
-
         self._hotkeys = SgkHotkeyManager(self._cfg["hotkeys"])
         self._uinput = SgkUinputInjector()
         clipboard = SgkClipboard(
@@ -106,7 +104,7 @@ class SgkApp:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sgk-asr")
         self._pipeline = SgkDictationPipeline(
             recorder,
-            transcriber,
+            None,
             clipboard,
             self._loop,
             self._executor,
@@ -130,15 +128,11 @@ class SgkApp:
         )
         if not behavior["enabled_on_start"]:
             self._hotkeys.sgk_set_paused(True)
-        if not self._hotkeys.sgk_start(self._loop):
-            _logger.error("sgk_hotkeys_unavailable_continuing_without_ptt")
 
-        _logger.info(
-            "sgk_app_ready",
-            extra={"hotkeys": self._cfg["hotkeys"], "no_gui": self._no_gui},
-        )
+        gui = not self._no_gui and self._sgk_start_gui()
+        self._loop.call_soon_threadsafe(self._sgk_schedule_model_load, model_cfg, behavior)
 
-        if not self._no_gui and self._sgk_start_gui():
+        if gui:
             assert self._qt_app is not None
             try:
                 sys.exit(self._qt_app.exec())
@@ -149,6 +143,43 @@ class SgkApp:
             return
 
         self._sgk_block_until_stopped()
+
+    def _sgk_schedule_model_load(self, model_cfg: dict[str, Any], behavior: dict[str, Any]) -> None:
+        assert self._loop is not None and self._executor is not None
+
+        def _load():
+            from sgk_voice_typer.asr.transcriber import SgkTranscriber
+
+            return SgkTranscriber(
+                name=model_cfg["name"],
+                device=model_cfg["device"],
+                compute_type=model_cfg["compute_type"],
+                language=model_cfg["language"],
+                beam_size=model_cfg["beam_size"],
+                no_speech_threshold=behavior["no_speech_threshold"],
+            )
+
+        self._loop.run_in_executor(self._executor, _load).add_done_callback(self._sgk_on_model_loaded)
+
+    def _sgk_on_model_loaded(self, fut: asyncio.Future) -> None:
+        if self._stopped:
+            return
+        try:
+            transcriber = fut.result()
+        except Exception as exc:
+            _logger.error("sgk_model_load_failed", extra={"error": str(exc)})
+            self.sgk_stop()
+            return
+        assert self._pipeline is not None and self._hotkeys is not None and self._loop is not None
+        self._pipeline.sgk_set_transcriber(transcriber)
+        if not self._hotkeys.sgk_start(self._loop):
+            _logger.error("sgk_hotkeys_unavailable_continuing_without_ptt")
+        if self._tray is not None:
+            self._tray.sgk_set_state("idle")
+        _logger.info(
+            "sgk_app_ready",
+            extra={"hotkeys": self._cfg["hotkeys"], "no_gui": self._no_gui},
+        )
 
     # ------------------------------------------------------------------
     # stop
@@ -164,7 +195,11 @@ class SgkApp:
             self._hotkeys.sgk_stop()
         if self._loop is not None and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
-        if self._loop_thread is not None and self._loop_thread.is_alive():
+        if (
+            self._loop_thread is not None
+            and self._loop_thread.is_alive()
+            and threading.current_thread() is not self._loop_thread
+        ):
             self._loop_thread.join(timeout=2.0)
         if self._loop is not None and not self._loop.is_running():
             self._loop.close()
@@ -174,6 +209,7 @@ class SgkApp:
             self._executor.shutdown(wait=True, cancel_futures=True)
         if self._uinput is not None:
             self._uinput.sgk_close()
+        self._sgk_teardown_signal_pump()
         for gui_obj in (self._overlay, self._tray):
             if gui_obj is not None:
                 try:
@@ -220,6 +256,8 @@ class SgkApp:
         fb["sound_enabled"] = enabled
         self._cues.sgk_set(enabled=enabled, volume=fb["sound_volume"])
         self._config.sgk_save(self._cfg)
+        if self._tray is not None:
+            self._tray.sgk_set_sound_enabled(enabled)
         _logger.info("sgk_sound_toggle", extra={"enabled": enabled})
 
     def _sgk_start_gui(self) -> bool:
@@ -237,19 +275,20 @@ class SgkApp:
         self._sgk_pick_qt_platform()
         self._qt_app = QApplication.instance() or QApplication(sys.argv)
         self._qt_app.setQuitOnLastWindowClosed(False)
+        self._sgk_setup_signal_pump()
 
         ui_cfg = self._cfg["ui"]
         self._tray = SgkTrayIcon(
             on_pause_toggle=self._sgk_toggle_enabled,
             on_open_settings=self._sgk_open_settings,
             on_quit=self.sgk_stop,
-            is_paused_getter=lambda: bool(self._hotkeys and self._hotkeys.sgk_is_paused()),
             lang=ui_cfg["language"],
             icon_style=ui_cfg["tray_icon_style"],
             on_sound_toggle=self._sgk_toggle_sound,
-            is_sound_enabled_getter=lambda: bool(self._cues and self._cues.sgk_enabled),
         )
         self._tray.sgk_create()
+        self._tray.sgk_set_paused(bool(self._hotkeys and self._hotkeys.sgk_is_paused()))
+        self._tray.sgk_set_sound_enabled(bool(self._cues and self._cues.sgk_enabled))
 
         fb_cfg = self._cfg["feedback"]
         if fb_cfg["overlay_enabled"] and self._pipeline is not None:
@@ -262,6 +301,37 @@ class SgkApp:
 
         _logger.info("sgk_gui_started")
         return True
+
+    def _sgk_setup_signal_pump(self) -> None:
+        """Python only runs signal handlers between bytecodes; while the main
+        thread sits in Qt's exec() that never happens on its own. The wakeup fd
+        makes the C-level handler write a byte, the notifier wakes Qt, and the
+        Python handler (__main__) runs in that callback."""
+        try:
+            from PyQt6.QtCore import QSocketNotifier
+
+            r, w = socket.socketpair()
+            w.setblocking(False)
+            signal.set_wakeup_fd(w.fileno())
+            notifier = QSocketNotifier(r.fileno(), QSocketNotifier.Type.Read)  # type: ignore[call-overload]
+            notifier.activated.connect(lambda *_: r.recv(4096))
+            self._sig_socks, self._sig_notifier = (r, w), notifier
+        except (ImportError, ValueError, OSError) as exc:
+            _logger.debug("sgk_signal_pump_unavailable", extra={"error": str(exc)})
+
+    def _sgk_teardown_signal_pump(self) -> None:
+        if self._sig_socks is None:
+            return
+        try:
+            signal.set_wakeup_fd(-1)
+        except ValueError:
+            pass
+        for sock in self._sig_socks:
+            try:
+                sock.close()
+            except OSError:
+                pass
+        self._sig_socks, self._sig_notifier = None, None
 
     def _sgk_on_state(self, state: str) -> None:
         """Pipeline state fan-out. Called from the asyncio thread - the sink
@@ -347,6 +417,8 @@ class SgkApp:
             self._cues.sgk_set(
                 enabled=fb["sound_enabled"], volume=fb["sound_volume"], style=fb["sound_style"]
             )
+            if self._tray is not None:
+                self._tray.sgk_set_sound_enabled(fb["sound_enabled"])
 
         if new_cfg["audio"] != old["audio"] or beh["min_duration_s"] != old["behavior"]["min_duration_s"]:
             if self._pipeline is not None:

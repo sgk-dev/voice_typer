@@ -86,6 +86,11 @@ class SgkDictationPipeline:
     def sgk_set_preview_interval(self, seconds: float) -> None:
         self._preview_interval_s = seconds
 
+    def sgk_set_transcriber(self, transcriber) -> None:
+        """The model loads in the background after start; until it is here a
+        press is ignored (the hotkeys are not even started before that)."""
+        self._transcriber = transcriber
+
     def sgk_set_recorder(self, recorder) -> None:
         """Swap the recorder (settings dialog changed the microphone)."""
         if not self._active:
@@ -135,7 +140,7 @@ class SgkDictationPipeline:
         if self._locked:
             await self._sgk_finish(capped=False)
             return
-        if self._active or self._processing:
+        if self._active or self._processing or self._transcriber is None:
             return
         self._active = True
         self._terminal = terminal

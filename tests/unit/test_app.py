@@ -53,7 +53,10 @@ def _fake_heavy(monkeypatch: pytest.MonkeyPatch, tmp_path):
 def _run_app(app: app_mod.SgkApp) -> threading.Thread:
     t = threading.Thread(target=app.sgk_start, daemon=True)
     t.start()
-    time.sleep(0.4)
+    for _ in range(40):
+        time.sleep(0.05)
+        if app._pipeline is not None and app._pipeline._transcriber is not None:
+            break
     return t
 
 
@@ -62,6 +65,7 @@ def test_headless_start_wires_pipeline_and_stops_clean() -> None:
     t = _run_app(app)
     try:
         assert app._pipeline is not None
+        assert app._pipeline._transcriber is not None        # loaded in the background
         assert app._hotkeys is not None
         assert app._loop is not None and app._loop.is_running()
         # a press/release round-trip should not raise (transcriber returns None)

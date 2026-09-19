@@ -20,6 +20,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "tray.about": {"en": "About", "ru": "О программе"},
     "tray.sound": {"en": "Sound", "ru": "Звук"},
     "tray.quit": {"en": "Quit", "ru": "Выход"},
+    "tray.tip.loading": {"en": "VoiceTyper - loading the model...", "ru": "VoiceTyper - загрузка модели..."},
     "tray.tip.idle": {"en": "VoiceTyper - ready", "ru": "VoiceTyper - готов"},
     "tray.tip.recording": {"en": "VoiceTyper - recording...", "ru": "VoiceTyper - запись..."},
     "tray.tip.processing": {"en": "VoiceTyper - transcribing...", "ru": "VoiceTyper - распознавание..."},

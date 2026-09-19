@@ -31,6 +31,37 @@ def test_set_listening_is_thread_safe_flag_only(qapp) -> None:
     assert ov._want_visible is False
 
 
+def test_listening_flag_reconciles_via_the_bridge(qapp) -> None:
+    ov = _overlay()
+    ov.sgk_create()
+    assert ov._render_timer.isActive() is False       # nothing ticks while idle
+    ov.sgk_set_listening(True)
+    qapp.processEvents()
+    assert ov._render_timer.isActive() is True
+    ov.sgk_set_listening(False)
+    qapp.processEvents()
+    ov.sgk_destroy()
+    assert ov._bridge is None
+
+
+def test_preview_fit_is_cached_per_text(qapp, monkeypatch: pytest.MonkeyPatch) -> None:
+    ov = _overlay(lambda: 0.02, preview=True)
+    ov.sgk_create()
+    ov._anchor_x, ov._anchor_bottom = 100, 900
+    ov.sgk_set_preview("hello there")
+    ov._grow_to_fit_preview()
+    assert ov._fitted_text == "hello there"
+
+    import PyQt6.QtGui as qtgui
+
+    def _boom(*_a, **_k):
+        raise AssertionError("re-measured unchanged text")
+
+    monkeypatch.setattr(qtgui, "QFontMetrics", _boom)
+    ov._grow_to_fit_preview()                          # unchanged text -> no re-measure
+    ov.sgk_destroy()
+
+
 def test_create_reconcile_render_destroy_do_not_raise(qapp) -> None:
     level = {"v": 0.0}
     ov = _overlay(lambda: level["v"])
