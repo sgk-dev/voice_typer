@@ -18,3 +18,4 @@ htmlcov/
 
 # local working docs, never part of the public repo
 _docs/
+docs/
